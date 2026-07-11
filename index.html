@@ -1002,9 +1002,13 @@ function jennysChoiceBtnHtml(){
    when the idle screen appears; each "Show more" tap pulls a fresh, VARIED Google batch (rotated
    rank + jittered centre, same trick as Let's OG) and appends new spots, so it keeps suggesting
    new restaurants rather than recycling one fixed set of 20. */
-var RAIL_FIRST = 6, RAIL_STEP = 5;
+/* Show RAIL_FIRST cards, then up to RAIL_MAX_CLICKS taps of "Show more", each revealing exactly
+   RAIL_STEP NEW cards. Because a Google batch is at most 20 (and after the 4.5★/300+ gate often
+   far fewer), a tap first FETCHES varied batches until RAIL_STEP more crowd-pleasers are loaded,
+   THEN reveals them as one clean block — no "1 now, 4 later" dribble. */
+var RAIL_FIRST = 6, RAIL_STEP = 5, RAIL_MAX_CLICKS = 3;
 var railClicks = 0;
-var popRail = { loading:false, error:false, batch:0, recs:[] };
+var popRail = { loading:false, error:false, filling:false, batch:-1, dry:0, recs:[] };
 function popRailRadiusM(){ return (midKm() || DEFAULT_MID) * 1000; }
 function popRailRec(placeId){
   for (var i=0;i<popRail.recs.length;i++){ if (popRail.recs[i].placeId === placeId) return popRail.recs[i]; }
@@ -1016,6 +1020,11 @@ function rerenderIdleRail(){
   railEl = document.querySelector('.rail'); if (railEl) railEl.scrollLeft = sx;
 }
 function idleRailVisible(){ return document.body.dataset.tab === 'spin' && !nearby.active && !draw.active; }
+function railEligible(){                               // loaded crowd-pleasers minus anything since saved
+  var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
+  return popRail.recs.filter(function(r){ return !saved[r.placeId]; });
+}
+function railExhausted(){ return popRail.dry >= 2 || popRail.batch >= 12; }   // Google tapped out (or hard cap)
 function popRailMerge(recs){
   var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
   var have = {}; popRail.recs.forEach(function(r){ have[r.placeId] = true; });
@@ -1026,10 +1035,11 @@ function popRailMerge(recs){
   });
   popRail.recs.sort(function(a,b){ return (b.ratingCount||0) - (a.ratingCount||0); });
 }
-function fetchPopularBatch(batch){
-  if (!placesKeyReady() || !home() || popRail.loading) return;
+function fetchPopularBatch(batch){                     // resolves to how many NEW eligible it added
+  if (!placesKeyReady() || !home()) return Promise.resolve(0);
   popRail.loading = true; popRail.error = false; popRail.batch = batch;
-  Places.nearby({
+  var before = railEligible().length;
+  return Places.nearby({
     includedPrimaryTypes: ['restaurant'],
     excludedPrimaryTypes: ['fast_food_restaurant'],
     maxResultCount: 20,
@@ -1040,19 +1050,33 @@ function fetchPopularBatch(batch){
     popRail.loading = false;
     popRailMerge(recs);
     if (idleRailVisible()){ rerenderIdleRail(); loadPopPhotos(); }
-  }).catch(function(){ popRail.loading = false; popRail.error = true; if (idleRailVisible()) rerenderIdleRail(); });
+    return railEligible().length - before;
+  }).catch(function(){ popRail.loading = false; popRail.error = true; if (idleRailVisible()) rerenderIdleRail(); return 0; });
 }
-function loadPopularRail(){                            // idle-render hook: first batch only, once
-  if (!placesKeyReady() || !home() || popRail.loading) return;
-  if (popRail.recs.length){ loadPopPhotos(); return; }
-  fetchPopularBatch(0);
+/* fetch varied batches until at least `target` eligible cards are loaded (or Google is tapped
+   out), then run done(). One chain at a time via the `filling` guard. */
+function ensureRail(target, done){
+  done = done || function(){};
+  if (railEligible().length >= target || railExhausted()){ done(); return; }
+  if (popRail.filling) return;
+  popRail.filling = true;
+  (function step(){
+    if (railEligible().length >= target || railExhausted()){ popRail.filling = false; done(); return; }
+    fetchPopularBatch(popRail.batch + 1).then(function(added){
+      popRail.dry = added > 0 ? 0 : popRail.dry + 1;
+      step();
+    });
+  })();
 }
-function morePopular(){                                // "Show more" tap: reveal + pull a fresh varied batch
-  railClicks++;
-  rerenderIdleRail();
-  if ((RAIL_FIRST + railClicks * RAIL_STEP) >= popRail.recs.length && !popRail.loading){
-    fetchPopularBatch((popRail.batch || 0) + 1);
-  }
+function loadPopularRail(){                            // idle-render hook: get the first RAIL_FIRST cards
+  if (!placesKeyReady() || !home()) return;
+  if (popRail.recs.length) loadPopPhotos();
+  ensureRail(RAIL_FIRST);
+}
+function morePopular(){                                // "Show more" tap: load RAIL_STEP more, then reveal them
+  if (railClicks >= RAIL_MAX_CLICKS || popRail.filling) return;
+  var want = RAIL_FIRST + (railClicks + 1) * RAIL_STEP;
+  ensureRail(want, function(){ railClicks++; rerenderIdleRail(); });
 }
 function loadPopPhotos(){
   if (!placesKeyReady()) return;
@@ -1066,9 +1090,8 @@ function loadPopPhotos(){
 }
 function popularRail(){
   if (!placesKeyReady() || !home()) return '';        // discovery-only: nothing to suggest without Google + a home point
-  var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
-  var pops = popRail.recs.filter(function(r){ return !saved[r.placeId]; });   // a place saved from the rail drops off it
-  if (!pops.length) return popRail.loading ? '<h2>Most popular nearby <small>finding spots…</small></h2>' : '';
+  var pops = railEligible();                           // a place saved from the rail drops off it
+  if (!pops.length) return (popRail.loading || popRail.filling) ? '<h2>Most popular nearby <small>finding spots…</small></h2>' : '';
   var shown = pops.slice(0, RAIL_FIRST + railClicks * RAIL_STEP);
   var html = '<h2>Most popular nearby <small>4.5&#9733;+ · 300+ reviews · new to you</small></h2><div class="rail">';
   shown.forEach(function(r){
@@ -1076,11 +1099,14 @@ function popularRail(){
       + '<div class="railname">'+esc(r.name)+'</div>'
       + '<div class="railmeta">&#9733; '+r.rating+' ('+r.ratingCount+') · '+priceLabel(r.priceLevel)+'</div></div>';
   });
-  /* always offer more — each tap pulls a fresh varied batch from Google */
-  html += '<div class="railcard" data-railmore="1"><div class="railmorebox">'
-    + (popRail.loading ? '<span class="arr">…</span>Finding more'
-                       : '<span class="arr">&#8594;</span>Show more<span class="cnt">fresh picks</span>')
-    + '</div></div>';
+  /* up to RAIL_MAX_CLICKS taps, each revealing RAIL_STEP more; hide once capped or nothing left */
+  var moreLeft = railClicks < RAIL_MAX_CLICKS && (pops.length > shown.length || !railExhausted());
+  if (moreLeft){
+    html += '<div class="railcard" data-railmore="1"><div class="railmorebox">'
+      + (popRail.filling ? '<span class="arr">…</span>Finding more'
+                         : '<span class="arr">&#8594;</span>Show more<span class="cnt">+'+RAIL_STEP+' more</span>')
+      + '</div></div>';
+  }
   return html + '</div>';
 }
 function nearbyIncludedTypes(){
