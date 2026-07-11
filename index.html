@@ -219,6 +219,13 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .kidbadge{background:var(--basil-tint); color:var(--basil); border-radius:7px; padding:2px 7px; font-weight:800; font-size:11px}
 .blockedbadge{background:var(--tomato-tint); color:var(--tomato); border-radius:7px; padding:2px 7px; font-weight:800; font-size:11px}
 .listcard.blocked{opacity:.6}
+/* swipe-right to remove */
+.swipewrap{position:relative; overflow:hidden}
+.swipebg{position:absolute; inset:0; display:flex; align-items:center; padding-left:26px;
+  background:var(--tomato); color:#fff; font-weight:900; font-size:15px; letter-spacing:.02em}
+.swipebg::before{content:'\2190\00a0\00a0'; font-size:17px}
+.swipewrap .listcard{position:relative; background:var(--bg); transition:transform .2s cubic-bezier(.2,.7,.3,1)}
+.swipewrap.swiping .listcard{transition:none}
 .byline{font-weight:800}
 .byline.mark{color:var(--denim)} .byline.jenny{color:var(--acc)}
 .empty-list{color:var(--muted); font-weight:700; text-align:center; padding:30px 12px; line-height:1.5}
@@ -332,6 +339,15 @@ textarea.txtinput{min-height:60px; resize:vertical}
   pointer-events:none; white-space:nowrap; max-width:90vw;
 }
 #toast.show{opacity:1}
+#snackbar{
+  position:fixed; left:50%; transform:translateX(-50%); bottom:calc(100px + env(safe-area-inset-bottom));
+  background:var(--ink); color:var(--bg); font-weight:800; font-size:14px; padding:7px 7px 7px 18px;
+  border-radius:99px; z-index:61; display:none; align-items:center; gap:12px; max-width:90vw;
+  box-shadow:0 10px 34px rgba(0,0,0,.5);
+}
+#snackbar.show{display:flex}
+#snackbar #snacktext{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#snackbar button{flex:0 0 auto; background:var(--tomato); color:#fff; font-weight:900; font-size:13px; padding:7px 16px; border-radius:99px}
 .confetti{position:fixed; z-index:70; width:10px; height:14px; border-radius:2px; pointer-events:none; top:0; left:0}
 </style>
 </head>
@@ -477,6 +493,7 @@ textarea.txtinput{min-height:60px; resize:vertical}
 </div>
 
 <div id="toast"></div>
+<div id="snackbar"><span id="snacktext"></span><button id="snackundo">Undo</button></div>
 
 <script>
 (function(){
@@ -505,6 +522,18 @@ function isBannedCuisine(cuisine){
   for (var i=0;i<BANNED_CUISINE.length;i++){ if (n.indexOf(BANNED_CUISINE[i]) !== -1) return true; }
   return false;
 }
+/* mega fast-food franchises kept out of every suggestion (name substring, case-insensitive).
+   Easy to extend — just add a lowercase fragment. */
+var BANNED_NAME = ['mcdonald','kfc','hungry jack','burger king','subway','pizza hut','domino',
+  'red rooster','oporto','nando','taco bell','carl\'s jr','carls jr','guzman','zambrero',
+  'starbucks','pizza capers','crust pizza'];
+function isBannedName(name){
+  var n = String(name||'').toLowerCase();
+  for (var i=0;i<BANNED_NAME.length;i++){ if (n.indexOf(BANNED_NAME[i]) !== -1) return true; }
+  return false;
+}
+/* one gate for both saved-list and discovery filtering */
+function isExcludedPlace(p){ return isBannedCuisine(p.cuisine) || isBannedName(p.name); }
 
 var CUISINE_EMOJI = [
   ['thai','🍜'],['viet','🍜'],['pho','🍜'],['noodle','🍜'],
@@ -879,7 +908,7 @@ function computePool(opts){
   return placesArr().filter(function(p){
     if (p.visitedAt) return false;
     if (p.blocked) return false;
-    if (isBannedCuisine(p.cuisine)) return false;
+    if (isExcludedPlace(p)) return false;
     if (!opts.ignoreKid && kidOn && !p.kidFriendly) return false;
     if (!opts.ignoreMeal && mealOn && !openInMealWindow(p, meal)) return false;
     if (!opts.ignoreOpenNow && openNow && !openRightNow(p)) return false;
@@ -966,22 +995,67 @@ function jennysChoiceBtnHtml(){
   return '<button class="'+cls+'" id="findbtn">Jenny’s Hit List'
     + '<span class="btnsub">'+n+' place'+(n===1?'':'s')+' in the running</span></button>';
 }
-/* idle-home rail: the saved list's crowd-pleasers (4.5★+, 300+ reviews), most-reviewed first.
-   Shows RAIL_FIRST cards; each "Show more" tap reveals RAIL_STEP more, max RAIL_CLICKS taps (session-local). */
+/* idle-home rail: crowd-pleasers NEARBY you haven't saved yet — a discovery suggestion,
+   not the saved list. Google popularity search (4.5★+, 300+ reviews), most-reviewed first,
+   with saved places + franchises + ruled-out cuisines stripped out. Fetched at most once per
+   session (cached), so the idle screen still makes near-zero API calls.
+   Shows RAIL_FIRST cards; each "Show more" tap reveals RAIL_STEP more, max RAIL_CLICKS taps. */
 var RAIL_FIRST = 6, RAIL_STEP = 5, RAIL_CLICKS = 3;
 var railClicks = 0;
+var POP_TTL = 6*60*60*1000;                          // refetch the rail at most every 6h within a session
+var popRail = { loading:false, error:false, fetchedAt:0, recs:[] };
+function popRailRadiusM(){ return (midKm() || DEFAULT_MID) * 1000; }
+function popRailRec(placeId){
+  for (var i=0;i<popRail.recs.length;i++){ if (popRail.recs[i].placeId === placeId) return popRail.recs[i]; }
+  return null;
+}
+function rerenderIdleRail(){
+  var railEl = document.querySelector('.rail'); var sx = railEl ? railEl.scrollLeft : 0;
+  renderSpin();
+  railEl = document.querySelector('.rail'); if (railEl) railEl.scrollLeft = sx;
+}
+function idleRailVisible(){ return document.body.dataset.tab === 'spin' && !nearby.active && !draw.active; }
+function loadPopularRail(){
+  if (!placesKeyReady() || !home()) return;
+  if (popRail.loading) return;
+  if (popRail.recs.length && (Date.now() - popRail.fetchedAt) < POP_TTL){ loadPopPhotos(); return; }
+  popRail.loading = true; popRail.error = false;
+  var h = home();
+  Places.nearby({
+    includedPrimaryTypes: ['restaurant'],
+    excludedPrimaryTypes: ['fast_food_restaurant'],
+    maxResultCount: 20, rankPreference:'POPULARITY', languageCode:'en-AU', regionCode:'au',
+    locationRestriction: { circle:{ center:{ latitude:h.lat, longitude:h.lng }, radius: popRailRadiusM() } }
+  }).then(function(recs){
+    popRail.loading = false; popRail.fetchedAt = Date.now();
+    var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
+    popRail.recs = recs.filter(function(r){
+      return r.placeId && !saved[r.placeId] && !isExcludedPlace(r)
+        && r.rating != null && r.rating >= 4.5 && (r.ratingCount||0) >= 300;
+    }).sort(function(a,b){ return (b.ratingCount||0) - (a.ratingCount||0); });
+    if (idleRailVisible()){ rerenderIdleRail(); loadPopPhotos(); }
+  }).catch(function(){ popRail.loading = false; popRail.error = true; });
+}
+function loadPopPhotos(){
+  if (!placesKeyReady()) return;
+  popRail.recs.forEach(function(r){
+    if (r.photoUri || !r.photoName) return;
+    Places.photo(r.photoName).then(function(uri){
+      r.photoUri = uri;
+      if (idleRailVisible()) rerenderIdleRail();
+    }).catch(function(){});
+  });
+}
 function popularRail(){
-  var pops = placesArr().filter(function(p){
-    return !p.visitedAt && !p.blocked && !isBannedCuisine(p.cuisine)
-      && p.rating != null && p.rating >= 4.5 && (p.ratingCount||0) >= 300;
-  }).sort(function(a,b){ return (b.ratingCount||0) - (a.ratingCount||0); });
+  if (!placesKeyReady() || !home()) return '';        // discovery-only: nothing to suggest without Google + a home point
+  var pops = popRail.recs;
   if (!pops.length) return '';
   var shown = pops.slice(0, RAIL_FIRST + railClicks * RAIL_STEP);
-  var html = '<h2>Most popular <small>4.5&#9733;+ · 300+ reviews</small></h2><div class="rail">';
-  shown.forEach(function(p){
-    html += '<div class="railcard" data-rail="'+p.id+'">' + photoHtml(p, 'railphoto')
-      + '<div class="railname">'+esc(p.name)+'</div>'
-      + '<div class="railmeta">&#9733; '+p.rating+' ('+p.ratingCount+') · '+priceLabel(p.priceLevel)+'</div></div>';
+  var html = '<h2>Most popular nearby <small>4.5&#9733;+ · 300+ reviews · new to you</small></h2><div class="rail">';
+  shown.forEach(function(r){
+    html += '<div class="railcard" data-poprail="'+esc(r.placeId)+'">' + photoHtml(r, 'railphoto')
+      + '<div class="railname">'+esc(r.name)+'</div>'
+      + '<div class="railmeta">&#9733; '+r.rating+' ('+r.ratingCount+') · '+priceLabel(r.priceLevel)+'</div></div>';
   });
   var left = pops.length - shown.length;
   if (left > 0 && railClicks < RAIL_CLICKS){
@@ -1007,7 +1081,7 @@ function nearbyFilter(recs){
   var prKeys = Object.keys(prices);
   return recs.filter(function(r){
     if (!r.placeId || saved[r.placeId]) return false;
-    if (isBannedCuisine(r.cuisine)) return false;
+    if (isExcludedPlace(r)) return false;
     if (r.rating == null || r.rating < MIN_RATING) return false;              // discovery: no vouch, no slot
     if (mealOn && !openInMealWindow(r, meal)) return false;
     if (openNow && !openRightNow(r)) return false;
@@ -1396,6 +1470,7 @@ function renderSpin(){
     host.innerHTML = popularRail() + discoveryBtnsHtml() + jennysChoiceBtnHtml()
       + '<div class="homephoto" id="homephoto" style="display:none"><img id="homephotoimg" alt=""></div>';
     loadHomePhoto();
+    loadPopularRail();
   }
 }
 /* Encrypted family photos: AES-256-GCM blobs keyed by SHA-256(table code), so the public
@@ -1505,11 +1580,13 @@ function renderList(){
     if (by) meta2.push('by '+by);
     if (which === 'been'){ meta2.push(p.worthRepeat ? 'worth going back' : (p.worthRepeat===false ? 'not again' : 'visited')); }
     else { var ac = ageCaption(p); if (ac) meta2.push(ac); }
-    return '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'">'
+    return '<div class="swipewrap" data-id="'+p.id+'">'
+      + '<div class="swipebg">Remove</div>'
+      + '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'">'
       + photoHtml(p, 'photo')
       + '<div class="listbody"><div class="name">'+esc(p.name)+'</div>'
       + '<div class="meta">'+meta1.join('<span class="sep">·</span>')+'</div>'
-      + '<div class="meta">'+meta2.join('<span class="sep">·</span>')+'</div></div></div>';
+      + '<div class="meta">'+meta2.join('<span class="sep">·</span>')+'</div></div></div></div>';
   }).join('');
 }
 
@@ -1932,6 +2009,7 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
     railEl = document.querySelector('.rail'); if (railEl) railEl.scrollLeft = sx;
     return;
   }
+  var pc = ev.target.closest('[data-poprail]'); if (pc){ var pr = popRailRec(pc.dataset.poprail); if (pr) openResult({ src:'nearby', rec:pr, savedId:null }); return; }
   var rc = ev.target.closest('[data-rail]'); if (rc){ openResult({ src:'saved', id: rc.dataset.rail }); return; }
   var oc = ev.target.closest('.optcard'); if (oc && oc.dataset.opt){ openResult({ src:'saved', id: oc.dataset.opt }); return; }
   var relax = ev.target.closest('[data-relax]');
@@ -2001,7 +2079,74 @@ document.getElementById('listseg').addEventListener('click', function(ev){
   renderList();
 });
 document.getElementById('listcards').addEventListener('click', function(ev){
+  if (swipedRecently){ swipedRecently = false; return; }   // a horizontal swipe shouldn't also open the card
   var c = ev.target.closest('.listcard'); if (c) openDetail(c.dataset.id);
+});
+
+/* swipe-right-to-remove on the Places list */
+var swipedRecently = false;
+(function(){
+  var host = document.getElementById('listcards');
+  var sw = { card:null, id:null, x0:0, y0:0, dx:0, dir:null, w:0 };
+  var THRESH = 0.42;                                        // fraction of card width to trigger the remove
+  host.addEventListener('touchstart', function(ev){
+    var card = ev.target.closest('.listcard'); if (!card){ sw.card = null; return; }
+    sw.card = card; sw.id = card.dataset.id; sw.w = card.offsetWidth || 320;
+    sw.x0 = ev.touches[0].clientX; sw.y0 = ev.touches[0].clientY; sw.dx = 0; sw.dir = null;
+  }, { passive:true });
+  host.addEventListener('touchmove', function(ev){
+    if (!sw.card) return;
+    var dx = ev.touches[0].clientX - sw.x0, dy = ev.touches[0].clientY - sw.y0;
+    if (sw.dir === null){
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      sw.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      if (sw.dir === 'h') sw.card.parentNode.classList.add('swiping');
+    }
+    if (sw.dir !== 'h') return;
+    dx = Math.max(0, dx);                                   // right only
+    sw.dx = dx;
+    sw.card.style.transform = 'translateX(' + dx + 'px)';
+    if (ev.cancelable) ev.preventDefault();                // hold the vertical scroll while swiping a row
+  }, { passive:false });
+  function end(){
+    if (!sw.card) return;
+    var card = sw.card, id = sw.id, wrap = card.parentNode;
+    wrap.classList.remove('swiping');
+    swipedRecently = (sw.dir === 'h');                      // any horizontal drag suppresses the trailing click
+    if (sw.dx > sw.w * THRESH){
+      card.style.transform = 'translateX(100%)';
+      setTimeout(function(){ removePlaceById(id); }, 170);  // let it slide off, then the list rebuilds without it
+    } else {
+      card.style.transform = '';
+    }
+    sw.card = null; sw.dir = null;
+  }
+  host.addEventListener('touchend', end);
+  host.addEventListener('touchcancel', end);
+})();
+
+/* remove with a 5s undo window */
+var lastRemoved = null, snackTimer = null;
+function removePlaceById(id){
+  var p = place(id); if (!p) return;
+  lastRemoved = { id:id, data: Object.assign({}, p) };
+  var patch = {}; patch['places/'+id] = null;
+  var lp = state && state.lastPick; if (lp && lp.placeKey === id) patch['lastPick'] = null;
+  Store.patch(patch);
+  showUndoSnack((p.name || 'Place') + ' removed');
+}
+function showUndoSnack(msg){
+  var s = document.getElementById('snackbar');
+  document.getElementById('snacktext').textContent = msg;
+  s.classList.add('show');
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(function(){ s.classList.remove('show'); lastRemoved = null; }, 5000);
+}
+function hideSnack(){ document.getElementById('snackbar').classList.remove('show'); clearTimeout(snackTimer); }
+document.getElementById('snackundo').addEventListener('click', function(){
+  if (!lastRemoved) { hideSnack(); return; }
+  Store.patch({ ['places/'+lastRemoved.id]: lastRemoved.data });
+  lastRemoved = null; hideSnack(); toast('Restored');
 });
 
 /* detail overlay (delegated, sheet is rebuilt each open) */
@@ -2029,11 +2174,9 @@ document.getElementById('detail-overlay').addEventListener('click', function(ev)
     closeOverlay('detail-overlay'); toast('Back in the rotation');
   }
   else if (t.id === 'd-remove'){
-    if (!confirm('Remove this place for good?')) return;
-    var patch = {}; patch['places/'+detailId] = null;
-    var lp = state && state.lastPick; if (lp && lp.placeKey === detailId) patch['lastPick'] = null;
-    Store.patch(patch);
-    closeOverlay('detail-overlay'); toast('Removed');
+    var rid = detailId;
+    closeOverlay('detail-overlay');
+    removePlaceById(rid);                                   // undo snackbar replaces the old confirm dialog
   }
 });
 
