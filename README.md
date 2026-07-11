@@ -34,7 +34,12 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
   Call, or **Show 3 others** once. Mega fast-food franchises (McDonald's, KFC,
   Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`)
-  are kept out of every suggestion, saved list and discovery alike.
+  are kept out of every suggestion, saved list and discovery alike. Other chains
+  that aren't banned are **collapsed to one location** in discovery + the rail
+  (`brandKey`): you won't see El Jannah from two suburbs. It keys on the first two
+  words (brand, not suburb); chains whose branches differ earlier — "Brunetti Oro"
+  vs "Brunetti Classico", or single-word brands like "Grill'd" — go in
+  `DEDUP_BRANDS` to force one result.
 - **Discovery variety (Let's OG + the rail).** Google's `searchNearby` returns at
   most 20 results with no pagination, so a fixed centre + ranking always returns
   the same ~20. To keep surfacing *new* restaurants, each batch is varied: batch 0
