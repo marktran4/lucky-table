@@ -20,14 +20,24 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   seeded and manually added places alike; a **Clear all** chip appears at the
   end of the row whenever any filter is active. A
   **Most popular nearby** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
-  crowd-pleasers near your home point that you haven't saved yet (one cached
-  Google call per session), not places already on your list. It sits above
+  crowd-pleasers near your home point that you haven't saved yet, not places
+  already on your list. Each **Show more** tap pulls a fresh Google batch and
+  appends new spots (it shows even when the saved list is empty). It sits above
   **Let's OG** (Google discovery of new nearby spots) and **Jenny's Hit List**
   (draw 3 from the saved list, pool count on the button). Tap a card or
   **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
   Call, or **Show 3 others** once. Mega fast-food franchises (McDonald's, KFC,
   Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`)
   are kept out of every suggestion, saved list and discovery alike.
+- **Discovery variety (Let's OG + the rail).** Google's `searchNearby` returns at
+  most 20 results with no pagination, so a fixed centre + ranking always returns
+  the same ~20. To keep surfacing *new* restaurants, each batch is varied: batch 0
+  is ranked by POPULARITY at your home point (the best spots), and every later
+  batch is ranked by DISTANCE from a search centre that rotates around home and
+  expands outward each full rotation. Results accumulate into a growing pool with
+  a "seen" set, so "show a different 15" and repeated Let's OG taps only ever show
+  places you haven't seen this session (verified live: ~15 all-new per tap). When
+  Google is genuinely tapped out it recycles the pool rather than dead-ending.
 - **Places tab** holds the shortlist (Want to try / Been). Tap **+** to add a place
   by name (Google fills the details). **We went** moves it to Been and out of the
   pool. **Swipe a row right to remove it** (a 5-second Undo snackbar appears);
