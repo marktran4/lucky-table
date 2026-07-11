@@ -534,6 +534,27 @@ function isBannedName(name){
 }
 /* one gate for both saved-list and discovery filtering */
 function isExcludedPlace(p){ return isBannedCuisine(p.cuisine) || isBannedName(p.name); }
+/* brand key for collapsing multi-location chains to ONE result (e.g. "El Jannah Dandenong" and
+   "El Jannah Craigieburn", or "Domino's Pizza Brunswick" and "…St Kilda"). First two words is the
+   brand for almost every chain (the rest is the suburb); a bare "El Jannah" collapses to itself.
+   Kept to 2 words to avoid merging genuinely different 1-word-named places.
+
+   DEDUP_BRANDS handles the two cases the 2-word rule misses: sub-branded chains whose branches use a
+   different 2nd word ("Brunetti Oro" / "Brunetti Classico") and single-word brands with a suburb
+   ("Grill'd Fitzroy" / "Grill'd Carlton"). Entries are in NORMALISED form (lowercase, apostrophes ->
+   space, so "Grill'd" is "grill d") and match a whole leading word-run. Easy to extend. */
+var DEDUP_BRANDS = ['brunetti', 'grill d'];
+function brandKey(name){
+  var norm = String(name||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+  for (var i=0;i<DEDUP_BRANDS.length;i++){
+    var b = DEDUP_BRANDS[i];
+    if (norm === b || norm.indexOf(b + ' ') === 0) return b;   // known chain -> collapse to one, whatever the branch
+  }
+  var t = norm.split(' ');
+  if (t[0] === 'the' || t[0] === 'a' || t[0] === 'an') t.shift();   // a leading article isn't the brand
+  if (!t[0]) return '';
+  return t.length >= 2 ? (t[0] + ' ' + t[1]) : t[0];
+}
 
 var CUISINE_EMOJI = [
   ['thai','🍜'],['viet','🍜'],['pho','🍜'],['noodle','🍜'],
@@ -1062,11 +1083,14 @@ function railEligible(){                               // loaded crowd-pleasers 
 function railExhausted(){ return popRail.dry >= 2 || popRail.batch >= 12; }   // Google tapped out (or hard cap)
 function popRailMerge(recs){
   var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
-  var have = {}; popRail.recs.forEach(function(r){ have[r.placeId] = true; });
+  var have = {}, brands = {};
+  popRail.recs.forEach(function(r){ have[r.placeId] = true; var b = brandKey(r.name); if (b) brands[b] = true; });
   recs.forEach(function(r){
     if (!r.placeId || have[r.placeId] || saved[r.placeId] || isExcludedPlace(r)) return;
     if (r.rating == null || r.rating < 4.5 || (r.ratingCount||0) < 300) return;   // crowd-pleaser gate
-    have[r.placeId] = true; popRail.recs.push(r);        // append only; the daily order is applied once the pool is built
+    var b = brandKey(r.name);
+    if (b && brands[b]) return;                          // one location per franchise is enough
+    have[r.placeId] = true; if (b) brands[b] = true; popRail.recs.push(r);   // append only; daily order applied at render
   });
 }
 function fetchPopularBatch(batch){                     // resolves to how many NEW eligible it added
@@ -1225,8 +1249,14 @@ function nearbyFetch(batch){
   });
 }
 function mergeNearby(recs){
-  var have = {}; nearby.pool.forEach(function(r){ have[r.placeId] = true; });
-  nearbyFilter(recs).forEach(function(r){ if (!have[r.placeId]){ have[r.placeId] = true; nearby.pool.push(r); } });
+  var have = {}, brands = {};
+  nearby.pool.forEach(function(r){ have[r.placeId] = true; var b = brandKey(r.name); if (b) brands[b] = true; });
+  nearbyFilter(recs).forEach(function(r){
+    if (have[r.placeId]) return;
+    var b = brandKey(r.name);
+    if (b && brands[b]) return;                        // one location per franchise is enough
+    have[r.placeId] = true; if (b) brands[b] = true; nearby.pool.push(r);
+  });
 }
 function presentBroad(unseen){
   nearby.shown = {};
