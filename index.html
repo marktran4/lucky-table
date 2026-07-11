@@ -1,0 +1,2152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Lucky Table</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lucky">
+<meta name="theme-color" content="#0A0A0A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<script src="firebase-config.js"></script>
+<script src="places-config.js"></script>
+<style>
+:root{
+  /* dark foundation — Uber Eats near-black + Spotify green accent (rebrand 2026-07) */
+  --bg:#0A0A0A; --card:#161616; --raised:#232323; --raised-hi:#2E2E2E;
+  --ink:#FFFFFF; --muted:#A3A3A3;
+  --acc:#1DB954; --acc-dk:#169C46; --acc-tint:#12321E;
+  --basil:#1DB954; --saffron:#F5A623; --denim:#5C9CE6; --rust:#D97A4E; --tomato:#FF5C4D;
+  --line:#2C2C2C; --shadow:none;
+  --basil-tint:#12321E; --saffron-tint:#3A2C10; --tomato-tint:#3A1712; --saffron-dk:#F5A623;
+  --r-card:16px; --shadow-lift:0 10px 28px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0; padding:0}
+body{
+  font-family:ui-rounded,-apple-system,"SF Pro Rounded","Segoe UI",system-ui,sans-serif;
+  background:var(--bg); color:var(--ink);
+  min-height:100vh; min-height:100dvh;
+  padding-bottom:calc(88px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit; border:none; cursor:pointer; color:inherit; background:none}
+input,textarea,select{font-family:inherit; font-size:16px; color:var(--ink)}
+a{color:inherit; text-decoration:none}
+
+/* header */
+header{
+  position:sticky; top:0; z-index:20; background:var(--bg);
+  padding:calc(10px + env(safe-area-inset-top)) 18px 8px;
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex; align-items:baseline; justify-content:space-between}
+.brand h1{margin:0; font-size:30px; font-weight:900; letter-spacing:-.5px}
+.brand h1 .dot{color:var(--acc)}
+.subtag{font-size:12px; font-weight:700; color:var(--muted)}
+#modebanner{
+  display:none; margin-top:6px; font-size:12px; font-weight:700;
+  background:var(--acc-tint); color:var(--acc); border-radius:8px; padding:5px 9px;
+}
+#modebanner.show{display:block}
+
+main{max-width:520px; margin:0 auto}
+.view{display:none; padding:8px 18px 24px}
+body[data-tab="spin"] #view-spin, body[data-tab="list"] #view-list{display:block}
+h2{font-size:17px; font-weight:900; margin:16px 0 10px}
+h2 small{font-weight:700; color:var(--muted); font-size:12px}
+
+/* "Most popular" horizontal rail (idle home) */
+.rail{display:flex; gap:10px; overflow-x:auto; margin:0 -18px; padding:0 18px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.railcard{flex:0 0 210px; cursor:pointer}
+.railphoto{width:210px; height:140px; border-radius:14px; overflow:hidden; background:var(--raised); position:relative}
+.railphoto img{width:100%; height:100%; object-fit:cover; display:block}
+.railphoto .ph-emoji{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:44px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
+.railname{font-weight:800; font-size:14.5px; margin-top:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.railmeta{font-size:12px; color:var(--muted); font-weight:700; margin-top:2px}
+.railmorebox{
+  width:210px; height:140px; border-radius:14px; background:var(--raised);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  font-weight:800; font-size:14px;
+}
+.railmorebox .arr{width:34px; height:34px; border-radius:50%; background:var(--raised-hi); display:flex; align-items:center; justify-content:center; font-size:16px}
+.railmorebox .cnt{color:var(--muted); font-weight:700; font-size:12px}
+
+/* filter chip bar — each chip opens a bottom sheet (Uber Eats pattern) */
+.filterbar{display:flex; gap:8px; margin:14px -18px 4px; padding:0 18px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+.filterbar::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:5px;
+  background:var(--raised); border-radius:99px; padding:9px 14px;
+  font-weight:800; font-size:13px; color:var(--ink); white-space:nowrap;
+}
+.chip .caret{font-size:8px; opacity:.65}
+.chip.on{background:var(--ink); color:var(--bg)}
+
+/* filter bottom sheet */
+#fsheet{text-align:center}
+.fs-handle{width:36px; height:4px; border-radius:2px; background:var(--raised-hi); margin:0 auto 14px}
+.fs-pills{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:6px 0 12px}
+.fs-pill{background:var(--raised); color:var(--ink); border-radius:99px; padding:12px 18px; font-weight:800; font-size:14px}
+.fs-pill.on{background:var(--ink); color:var(--bg)}
+.fs-label{font-size:11px; font-weight:800; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; margin:14px 2px 6px; text-align:left}
+.fs-list{max-height:46vh; overflow-y:auto; text-align:left; margin:0 0 8px}
+.fs-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 2px; border-bottom:1px solid var(--line); font-weight:800; font-size:15px; cursor:pointer}
+.fs-row:last-child{border-bottom:none}
+.fs-sub{color:var(--muted); font-weight:700; font-size:12px}
+.fs-tick{width:24px; min-width:24px; height:24px; border-radius:7px; border:2px solid var(--raised-hi); display:flex; align-items:center; justify-content:center; color:#0A0A0A; font-weight:900; font-size:14px}
+.fs-row.on .fs-tick{background:var(--acc); border-color:var(--acc)}
+.fs-apply{display:block; width:100%; background:var(--ink); color:var(--bg); font-weight:900; font-size:16px; border-radius:99px; padding:15px; margin-top:6px}
+.fs-apply:active{opacity:.85}
+.fs-reset{display:block; margin:12px auto 0; color:var(--ink); font-weight:800; font-size:15px; padding:4px 8px}
+
+/* sheets slide up */
+.overlay.show .sheet{animation:sheetup .28s cubic-bezier(.2,.8,.3,1) both}
+@keyframes sheetup{from{transform:translateY(26px); opacity:.5} to{transform:none; opacity:1}}
+@media (prefers-reduced-motion: reduce){ .overlay.show .sheet{animation:none} }
+.btnsub{display:block; font-size:12px; font-weight:700; opacity:.7; margin-top:2px}
+.homephoto{margin-top:14px}
+.homephoto img{width:100%; height:230px; object-fit:cover; border-radius:16px; display:block}
+
+/* big find button */
+.findbtn{
+  display:block; width:100%; margin-top:8px; background:var(--acc); color:#0A0A0A;
+  font-size:20px; font-weight:900; border-radius:99px; padding:18px;
+}
+.findbtn:active{transform:translateY(1px); background:var(--acc-dk)}
+.findbtn:disabled{opacity:.45}
+
+/* relaxation chips */
+.relax{margin-top:14px; text-align:center}
+.relax p{font-size:14px; font-weight:800; color:var(--muted); margin:0 0 10px}
+.relaxchip{
+  display:inline-block; background:var(--saffron); color:#0A0A0A; font-weight:900;
+  border-radius:12px; padding:12px 18px; font-size:15px; margin:4px;
+}
+.relaxclear{display:block; margin:10px auto 0; color:var(--muted); font-weight:800; font-size:13px}
+
+/* option cards */
+.options{margin-top:6px}
+.optlabel{font-size:12px; font-weight:800; color:var(--muted); text-align:center; margin:10px 0}
+.optcard{
+  background:var(--card); border:1px solid var(--line); border-radius:16px; margin:10px 0;
+  box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column; align-items:stretch; cursor:pointer;
+  animation:pop .35s cubic-bezier(.2,.7,.3,1.3) both;
+}
+.optcard:nth-child(2){animation-delay:.06s} .optcard:nth-child(3){animation-delay:.12s}
+@keyframes pop{from{opacity:0; transform:translateY(8px) scale(.98)} to{opacity:1; transform:none}}
+@media (prefers-reduced-motion: reduce){ .optcard{animation:none} }
+.photo{width:96px; min-width:96px; background:var(--raised); position:relative}
+.photo img{width:100%; height:100%; object-fit:cover; display:block}
+.photo .ph-emoji{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:34px}
+.optcard .photo{width:100%; min-width:0; height:170px}
+.optcard .photo .ph-emoji{background:linear-gradient(135deg,#1A1A1A,#12321E); font-size:44px}
+.optbody{flex:1; min-width:0; padding:12px 14px}
+.optbody .name{font-weight:900; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.optbody .meta{font-size:12px; color:var(--muted); font-weight:700; margin-top:3px; line-height:1.5}
+.optcard .optbody{padding:12px 16px 14px}
+.optcard .optbody .name{font-size:17px}
+.optbody .meta .sep{opacity:.5; margin:0 5px}
+.pricebadge{font-weight:900; color:var(--basil)}
+.ratebadge{font-weight:800}
+.spindecide{
+  display:block; width:100%; margin-top:12px; background:var(--card); color:var(--acc);
+  border:2px solid var(--acc); font-size:17px; font-weight:900; border-radius:16px; padding:15px;
+}
+.spindecide:active{transform:translateY(1px)}
+.findagain{display:block; margin:14px auto 0; color:var(--muted); font-weight:800; font-size:13px}
+
+/* discovery funnel */
+.stagelabel{font-size:11px; font-weight:800; letter-spacing:.5px; color:var(--muted); text-align:center; margin:12px 0 8px; text-transform:uppercase}
+.surprisebtn{display:block; width:100%; margin-top:10px; background:var(--raised); color:var(--ink); font-size:16px; font-weight:900; border-radius:99px; padding:15px}
+.surprisebtn:active{transform:translateY(1px); background:var(--raised-hi)}
+.cuisinebtn{display:block; width:100%; margin-top:9px; background:var(--raised); color:var(--saffron); font-size:16px; font-weight:900; border-radius:99px; padding:15px}
+.cuisinebtn:active{transform:translateY(1px); background:var(--raised-hi)}
+.brlist{margin-top:4px; border-radius:var(--r-card); overflow:hidden; border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow)}
+.brow{display:flex; align-items:center; gap:11px; padding:10px 13px; border-bottom:1px solid var(--line); cursor:pointer; transition:background .12s}
+.brow:last-child{border-bottom:none}
+.brow.sel{background:var(--acc-tint); box-shadow:inset 3px 0 0 var(--acc)}
+.bphoto{width:72px; min-width:72px; height:72px; border-radius:10px; overflow:hidden; background:var(--raised); position:relative; align-self:center}
+.bphoto img{width:100%; height:100%; object-fit:cover; display:block}
+.bphoto .ph-emoji{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:28px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
+.brbody{flex:1; min-width:0}
+.brbody .name{font-weight:800; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.brbody .meta{font-size:12px; color:var(--muted); font-weight:700; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.brtick{width:24px; min-width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:14px}
+.brow.sel .brtick{background:var(--acc); border-color:var(--acc); animation:pop .15s cubic-bezier(.2,.7,.3,1.3) both}
+.pickbar{position:sticky; bottom:calc(96px + env(safe-area-inset-bottom)); margin-top:14px; background:rgba(22,22,22,.96); backdrop-filter:blur(8px); border:1px solid var(--line); border-radius:16px; padding:12px; box-shadow:var(--shadow-lift)}
+.pickcount{text-align:center; font-size:12.5px; font-weight:800; color:var(--muted); margin-bottom:8px}
+.pickquiet{display:flex; justify-content:space-between; margin-top:8px}
+.pickquiet button{color:var(--muted); font-weight:800; font-size:12.5px; padding:6px 2px}
+.ovchip{display:block; width:fit-content; background:var(--saffron); color:#0A0A0A; font-weight:900; font-size:13px; border-radius:99px; padding:6px 12px; margin:0 auto 8px; cursor:pointer}
+.ovchip span{opacity:.7; margin-left:4px}
+.skelrow{height:52px; border-radius:12px; margin:8px 0; background:linear-gradient(90deg,#1C1C1C 25%,#262626 37%,#1C1C1C 63%); background-size:400% 100%; animation:shimmer 1.4s infinite}
+@keyframes shimmer{0%{background-position:100% 0} 100%{background-position:-100% 0}}
+@media (prefers-reduced-motion: reduce){ .skelrow{animation:none} .brow.sel .brtick{animation:none} }
+.optcard.ncard{flex-direction:column; align-items:stretch; cursor:pointer}
+.ncard .ntop{display:flex; flex-direction:column; align-items:stretch}
+.newbadge{
+  position:absolute; top:10px; left:10px; z-index:1;
+  background:var(--acc); color:#0A0A0A; border-radius:7px; padding:3px 8px; font-weight:800; font-size:11px;
+}
+.tasteblock{margin:6px 0 12px; text-align:left; background:var(--basil-tint); border-radius:14px; padding:12px 14px}
+.tastelabel{font-size:10.5px; font-weight:800; letter-spacing:.5px; color:var(--basil); text-transform:uppercase; margin-bottom:8px}
+.dishrow{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px}
+.dishchip{background:var(--raised); color:var(--basil); border:1px solid #2E4A38; border-radius:99px; padding:4px 10px; font-weight:800; font-size:12.5px; text-transform:capitalize}
+.tastequote{font-size:13px; font-style:italic; color:var(--ink); line-height:1.45; margin:4px 0}
+.tastesum{font-size:13px; color:var(--ink); line-height:1.45}
+
+/* list */
+.seg{display:inline-flex; background:var(--raised); border-radius:99px; padding:3px; gap:2px}
+.seg button{padding:8px 18px; border-radius:99px; font-weight:800; font-size:13px; color:var(--muted)}
+.seg button.on{background:var(--ink); color:var(--bg)}
+.listcard{
+  background:none; overflow:hidden; display:flex; align-items:stretch; cursor:pointer;
+  border-bottom:1px solid var(--line);
+}
+.listcard.been{opacity:.72}
+.listcard .photo{width:104px; min-width:104px; height:104px; border-radius:12px; overflow:hidden; align-self:center; margin:10px 0 10px 2px}
+.listcard .photo .ph-emoji{font-size:40px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
+.listbody{flex:1; min-width:0; padding:14px 12px; align-self:center}
+.listbody .name{font-weight:900; font-size:17px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.listbody .meta{font-size:12.5px; color:var(--muted); font-weight:700; margin-top:4px; line-height:1.5}
+.kidbadge{background:var(--basil-tint); color:var(--basil); border-radius:7px; padding:2px 7px; font-weight:800; font-size:11px}
+.blockedbadge{background:var(--tomato-tint); color:var(--tomato); border-radius:7px; padding:2px 7px; font-weight:800; font-size:11px}
+.listcard.blocked{opacity:.6}
+.byline{font-weight:800}
+.byline.mark{color:var(--denim)} .byline.jenny{color:var(--acc)}
+.empty-list{color:var(--muted); font-weight:700; text-align:center; padding:30px 12px; line-height:1.5}
+
+/* floating add */
+.fab{
+  position:fixed; right:18px; bottom:calc(96px + env(safe-area-inset-bottom)); z-index:35;
+  width:58px; height:58px; border-radius:50%; background:var(--acc); color:#0A0A0A;
+  font-size:30px; font-weight:900; box-shadow:0 4px 14px rgba(0,0,0,.5);
+  display:flex; align-items:center; justify-content:center;
+}
+.fab:active{transform:translateY(2px)}
+body[data-tab="spin"].funnelbroad .fab{display:none}   /* keep the FAB off the sticky pick bar */
+
+/* tabbar */
+nav{
+  position:fixed; bottom:0; left:0; right:0; z-index:30;
+  display:flex; justify-content:center; gap:6px;
+  background:rgba(10,10,10,.92); backdrop-filter:blur(10px);
+  border-top:1px solid var(--line);
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+}
+nav button{
+  flex:1; max-width:160px; display:flex; flex-direction:column; align-items:center; gap:2px;
+  font-size:11px; font-weight:800; color:var(--muted); border-radius:12px; padding:7px 0;
+}
+nav button .ico{font-size:22px; line-height:1}
+body[data-tab="spin"] nav .t-spin, body[data-tab="list"] nav .t-list{color:var(--ink); background:var(--raised)}
+
+/* overlays */
+.overlay{
+  position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.62);
+  display:none; align-items:flex-end; justify-content:center;
+}
+.overlay.show{display:flex}
+.sheet{
+  background:var(--card); border-radius:22px 22px 0 0; width:100%; max-width:520px;
+  padding:22px 22px calc(26px + env(safe-area-inset-bottom)); text-align:center;
+  max-height:92vh; overflow-y:auto;
+}
+.sheet h3{margin:0 0 6px; font-size:22px; font-weight:900}
+.sheet p{margin:4px 0 14px; color:var(--muted); font-weight:700; font-size:14px}
+.sheetbtns{display:flex; flex-direction:column; gap:10px; margin-top:8px}
+.sheetbtns .primary{background:var(--acc); color:#0A0A0A; font-weight:900; font-size:16px; border-radius:99px; padding:14px}
+.sheetbtns .ghost{background:var(--raised); color:var(--ink); font-weight:900; font-size:15px; border-radius:99px; padding:13px}
+.sheetbtns .danger{background:var(--tomato-tint); color:var(--tomato); font-weight:900; font-size:15px; border-radius:99px; padding:13px}
+.sheetbtns .quiet{color:var(--muted); font-weight:800; padding:8px}
+.whorow{display:flex; gap:12px; margin-top:14px}
+.whorow button{flex:1; border-radius:16px; padding:20px 10px; font-size:17px; font-weight:900}
+.who-mark{background:var(--denim); color:#0A0A0A} .who-jenny{background:var(--acc); color:#0A0A0A}
+.keyinput,.txtinput{width:100%; border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--raised); margin-bottom:10px}
+textarea.txtinput{min-height:60px; resize:vertical}
+
+/* result sheet */
+.res-photo{width:100%; height:150px; border-radius:16px; overflow:hidden; background:var(--raised); position:relative; margin-bottom:10px}
+/* full-bleed to the sheet's top corners ONLY where the photo is the sheet's first element
+   (result + list-detail); the add-confirm card renders .res-photo mid-sheet below the search input */
+#result-overlay .res-photo, #detail-sheet .res-photo{
+  width:calc(100% + 44px); height:170px; border-radius:22px 22px 0 0; margin:-22px -22px 12px;
+}
+#res-name{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}   /* long names cap at 2 lines */
+.res-photo img{width:100%; height:100%; object-fit:cover; display:block}
+.res-photo .ph-emoji{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:56px}
+.openline{font-size:14px; font-weight:800; margin:6px 0 12px; border-radius:10px; padding:8px 12px; background:var(--raised); color:var(--muted)}
+.openline.open{background:var(--basil-tint); color:var(--basil)}
+.openline.shut{background:var(--tomato-tint); color:var(--tomato)}
+.actionrow{display:flex; gap:10px}
+.actbtn{
+  flex:1; background:var(--denim); color:#0A0A0A; font-weight:900; font-size:15px;
+  border-radius:99px; padding:14px; text-align:center;
+}
+.actbtn.call{background:var(--basil)}
+
+/* add flow */
+.suggestlist{text-align:left; margin:2px 0 8px}
+.suggest{
+  padding:12px 10px; border-bottom:1px solid var(--line); cursor:pointer;
+}
+.suggest:last-child{border-bottom:none}
+.suggest .s-name{font-weight:800; font-size:15px}
+.suggest .s-sub{font-size:12px; color:var(--muted); font-weight:700}
+.confirmcard{text-align:left; margin-top:6px}
+.confirmcard .field{margin:10px 0}
+.confirmcard label{display:block; font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px}
+.kidcheck{display:flex; align-items:center; gap:10px; text-align:left; background:var(--raised); border-radius:12px; padding:12px; margin:10px 0}
+.kidcheck input{width:22px; height:22px; accent-color:var(--basil)}
+.kidcheck .kc-text{font-weight:800; font-size:14px}
+.kidcheck .kc-cap{font-size:11px; color:var(--muted); font-weight:700}
+.spinner{width:20px; height:20px; border:3px solid var(--line); border-top-color:var(--acc); border-radius:50%; display:inline-block; animation:spin 1s linear infinite; vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* wheel */
+#wheelbox{position:relative; width:min(80vw,300px); height:min(80vw,300px); margin:6px auto 0}
+#pointer{
+  position:absolute; top:-6px; left:50%; transform:translateX(-50%); z-index:3;
+  width:0; height:0; border-left:13px solid transparent; border-right:13px solid transparent;
+  border-top:22px solid var(--ink); filter:drop-shadow(0 2px 2px rgba(0,0,0,.2));
+}
+#wheelrot{width:100%; height:100%; transition:transform 4.2s cubic-bezier(.12,.65,.06,1)}
+@media (prefers-reduced-motion: reduce){ #wheelrot{transition-duration:.6s} }
+#wheelhub{
+  position:absolute; inset:0; margin:auto; width:56px; height:56px; border-radius:50%;
+  background:var(--card); border:3px solid var(--ink); z-index:2;
+  display:flex; align-items:center; justify-content:center; font-size:24px;
+}
+
+#toast{
+  position:fixed; left:50%; transform:translateX(-50%); bottom:calc(100px + env(safe-area-inset-bottom));
+  background:var(--ink); color:var(--bg); font-weight:800; font-size:14px;
+  padding:10px 18px; border-radius:99px; z-index:60; opacity:0; transition:opacity .25s;
+  pointer-events:none; white-space:nowrap; max-width:90vw;
+}
+#toast.show{opacity:1}
+.confetti{position:fixed; z-index:70; width:10px; height:14px; border-radius:2px; pointer-events:none; top:0; left:0}
+</style>
+</head>
+<body data-tab="spin">
+
+<header>
+  <div class="brand">
+    <h1>Lucky Table<span class="dot">.</span></h1>
+    <span class="subtag" id="subtag"></span>
+  </div>
+  <div id="modebanner"></div>
+</header>
+
+<main>
+  <!-- ===== SPIN VIEW ===== -->
+  <section class="view" id="view-spin">
+    <div class="filterbar" id="filterbar"></div>
+
+    <div id="spinaction"></div>
+  </section>
+
+  <!-- ===== LIST VIEW ===== -->
+  <section class="view" id="view-list">
+    <div style="display:flex; justify-content:center; margin:10px 0 4px">
+      <div class="seg" id="listseg">
+        <button data-seg="try" class="on">Want to try</button>
+        <button data-seg="been">Been</button>
+      </div>
+    </div>
+    <div id="listcards"></div>
+  </section>
+</main>
+
+<button class="fab" id="fab">+</button>
+
+<nav>
+  <button class="t-spin" data-tab="spin"><span class="ico">&#127869;</span>Dine out</button>
+  <button class="t-list" data-tab="list"><span class="ico">&#128205;</span>Places</button>
+</nav>
+
+<!-- who overlay -->
+<div class="overlay" id="who-overlay">
+  <div class="sheet">
+    <h3>Whose phone is this?</h3>
+    <p>Just once, so the app knows who's adding what.</p>
+    <div class="whorow">
+      <button class="who-mark" data-who="mark">Mark</button>
+      <button class="who-jenny" data-who="jenny">Jenny</button>
+    </div>
+  </div>
+</div>
+
+<!-- table code overlay -->
+<div class="overlay" id="key-overlay">
+  <div class="sheet">
+    <h3>Table code</h3>
+    <p>Open the link Mark sent (the code is built in), or paste the link or code here.</p>
+    <input class="keyinput" type="text" id="keyinput" placeholder="Paste link or code">
+    <div class="sheetbtns"><button class="primary" id="keysave">Let's go</button></div>
+  </div>
+</div>
+
+<!-- home location overlay -->
+<div class="overlay" id="home-overlay">
+  <div class="sheet">
+    <h3>Where's home?</h3>
+    <p>Used once to work out how far each place is. Nothing leaves your phone but the two numbers.</p>
+    <input class="txtinput" type="text" id="home-search" placeholder="Type your suburb or street" autocomplete="off">
+    <div class="suggestlist" id="home-suggests"></div>
+    <div class="sheetbtns">
+      <button class="primary" id="home-use">Use this phone's location</button>
+      <button class="quiet" id="home-skip">Skip for now</button>
+    </div>
+  </div>
+</div>
+
+<!-- add overlay -->
+<div class="overlay" id="add-overlay">
+  <div class="sheet">
+    <h3>Add a place</h3>
+    <p id="add-hint">Type the restaurant name.</p>
+    <input class="txtinput" type="text" id="add-search" placeholder="e.g. Tipo 00" autocomplete="off">
+    <div class="suggestlist" id="add-suggests"></div>
+    <div class="confirmcard" id="add-confirm" style="display:none"></div>
+    <div class="sheetbtns">
+      <button class="primary" id="add-save" style="display:none">Add</button>
+      <button class="quiet" id="add-manual">Add by name only</button>
+      <button class="quiet" id="add-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- wheel overlay -->
+<div class="overlay" id="wheel-overlay">
+  <div class="sheet">
+    <h3 id="wheel-h3">Let the wheel decide</h3>
+    <div id="wheelbox">
+      <div id="pointer"></div>
+      <div id="wheelrot"><svg id="wheelsvg" viewBox="-170 -170 340 340" width="100%" height="100%"></svg></div>
+      <div id="wheelhub">&#127860;</div>
+    </div>
+  </div>
+</div>
+
+<!-- result overlay -->
+<div class="overlay" id="result-overlay">
+  <div class="sheet">
+    <div class="res-photo" id="res-photo"></div>
+    <h3 id="res-name"></h3>
+    <p id="res-meta"></p>
+    <div class="openline" id="res-open"></div>
+    <div class="tasteblock" id="res-taste" style="display:none"></div>
+    <div class="sheetbtns" id="res-choose">
+      <button class="primary" id="res-lock">Lock it in</button>
+      <button class="ghost" id="res-reshuffle">Show 3 others</button>
+      <button class="quiet" id="res-back">back to the list</button>
+    </div>
+    <div class="sheetbtns" id="res-actions" style="display:none">
+      <div class="actionrow">
+        <a class="actbtn" id="res-directions" target="_blank" rel="noopener">Directions</a>
+        <a class="actbtn call" id="res-call">Call</a>
+      </div>
+      <button class="ghost" id="res-visited">Mark as visited when you're back</button>
+      <button class="quiet" id="res-done">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- list detail overlay -->
+<div class="overlay" id="detail-overlay">
+  <div class="sheet" id="detail-sheet"></div>
+</div>
+
+<!-- filter sheet (one skeleton, content rendered per filter) -->
+<div class="overlay" id="filter-overlay">
+  <div class="sheet" id="fsheet">
+    <div class="fs-handle"></div>
+    <h3 id="fs-title"></h3>
+    <div id="fs-body"></div>
+    <button class="fs-apply" id="fs-apply"></button>
+    <button class="fs-reset" id="fs-reset">Reset</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ==================== constants ==================== */
+var NAMES = { mark:'Mark', jenny:'Jenny' };
+var WEDGE = ['#1DB954','#F5A623','#5C9CE6','#FF5C4D','#B07CC6','#2AA198'];
+var RECENT_MS = 14*24*60*60*1000;
+var MEL = { lat:-37.8136, lng:144.9631 };            // autocomplete bias centre
+/* meal windows (minutes from midnight), tuned around the 7pm family hard stop */
+var MEAL_WIN = { lunch:[11*60+30, 14*60], dinner:[17*60, 19*60] };
+var DEFAULT_NEAR = 4, DEFAULT_MID = 10;              // km ring thresholds (editable via settings)
+var MIN_RATING = 4.0;                                // hard floor for Google discovery (saved-list floor is ratingMin, user-set)
+var NEARBY_MAX = 15;                                 // rows shown in the broad stage
+var ROULETTE = [
+  ['Thai','thai_restaurant'], ['Vietnamese','vietnamese_restaurant'], ['Japanese','japanese_restaurant'],
+  ['Korean','korean_restaurant'], ['Chinese','chinese_restaurant'],
+  ['Italian','italian_restaurant'], ['Pizza','pizza_restaurant'], ['Mexican','mexican_restaurant'],
+  ['Burgers','hamburger_restaurant'], ['Seafood','seafood_restaurant'], ['Greek','greek_restaurant']
+];
+/* cuisines excluded from every pool (saved list + Google discovery): substring match, case-insensitive */
+var BANNED_CUISINE = ['indian','pakistani','bangladesh','sri lankan'];
+function isBannedCuisine(cuisine){
+  var n = String(cuisine||'').toLowerCase();
+  for (var i=0;i<BANNED_CUISINE.length;i++){ if (n.indexOf(BANNED_CUISINE[i]) !== -1) return true; }
+  return false;
+}
+
+var CUISINE_EMOJI = [
+  ['thai','🍜'],['viet','🍜'],['pho','🍜'],['noodle','🍜'],
+  ['ramen','🍜'],['japan','🍣'],['sushi','🍣'],['korean','🍲'],
+  ['chinese','🥢'],['dumpling','🥟'],['indian','🍛'],['curry','🍛'],
+  ['italian','🍝'],['pasta','🍝'],['pizza','🍕'],['mexican','🌮'],
+  ['taco','🌮'],['burger','🍔'],['bbq','🍖'],['steak','🥩'],
+  ['seafood','🦐'],['fish','🐟'],['greek','🥙'],['cafe','☕'],
+  ['coffee','☕'],['bakery','🥐'],['dessert','🍰'],['bar','🍺'],
+  ['pub','🍺'],['vegan','🥗'],['veg','🥗']
+];
+
+/* cuisine label -> Google primary type, for server-side filtering of nearby discovery */
+var CUISINE_TYPE = [
+  ['thai','thai_restaurant'],['viet','vietnamese_restaurant'],['japan','japanese_restaurant'],
+  ['sushi','sushi_restaurant'],['ramen','ramen_restaurant'],['korean','korean_restaurant'],
+  ['chinese','chinese_restaurant'],['italian','italian_restaurant'],
+  ['pizza','pizza_restaurant'],['mexican','mexican_restaurant'],['burger','hamburger_restaurant'],
+  ['bbq','barbecue_restaurant'],['steak','steak_house'],['seafood','seafood_restaurant'],
+  ['greek','greek_restaurant'],['cafe','cafe'],['bakery','bakery'],
+  ['vegan','vegan_restaurant'],['veg','vegetarian_restaurant']
+];
+function cuisineType(label){
+  var n = String(label||'').toLowerCase();
+  for (var i=0;i<CUISINE_TYPE.length;i++){ if (n.indexOf(CUISINE_TYPE[i][0]) !== -1) return CUISINE_TYPE[i][1]; }
+  return null;
+}
+
+/* ==================== Google Places (New) client ==================== */
+/* Add-time only, plus one open-check per locked-in pick. Field masks per spec section 5. */
+var PLACES_BASE = 'https://places.googleapis.com/v1';
+function placesKey(){ return window.PLACES_API_KEY; }
+var Places = {
+  autocomplete: function(input, token){
+    return fetch(PLACES_BASE+'/places:autocomplete', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'X-Goog-Api-Key':placesKey() },
+      body: JSON.stringify({
+        input: input, sessionToken: token,
+        /* no primary-type filter: the old restaurant/cafe/bar/bakery whitelist hid delis,
+           sandwich/ice-cream shops, food stores etc. You're typing a known place — let it through. */
+        includedRegionCodes: ['au'],
+        locationBias: { circle: { center: { latitude:MEL.lat, longitude:MEL.lng }, radius: 30000 } }
+      })
+    }).then(chk).then(function(j){
+      return (j.suggestions||[]).map(function(s){
+        var pp = s.placePrediction || {};
+        var sf = pp.structuredFormat || {};
+        return {
+          placeId: pp.placeId,
+          main: (sf.mainText && sf.mainText.text) || (pp.text && pp.text.text) || '',
+          sub:  (sf.secondaryText && sf.secondaryText.text) || ''
+        };
+      }).filter(function(x){ return x.placeId; });
+    });
+  },
+  homeAutocomplete: function(input, token){          // no restaurant type restriction: suburbs + addresses
+    return fetch(PLACES_BASE+'/places:autocomplete', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'X-Goog-Api-Key':placesKey() },
+      body: JSON.stringify({
+        input: input, sessionToken: token,
+        includedRegionCodes: ['au'],
+        locationBias: { circle: { center: { latitude:MEL.lat, longitude:MEL.lng }, radius: 50000 } }
+      })
+    }).then(chk).then(function(j){
+      return (j.suggestions||[]).map(function(s){
+        var pp = s.placePrediction || {}, sf = pp.structuredFormat || {};
+        return {
+          placeId: pp.placeId,
+          main: (sf.mainText && sf.mainText.text) || (pp.text && pp.text.text) || '',
+          sub:  (sf.secondaryText && sf.secondaryText.text) || ''
+        };
+      }).filter(function(x){ return x.placeId; });
+    });
+  },
+  nearby: function(body){
+    var mask = 'places.id,places.displayName,places.formattedAddress,places.addressComponents,places.location,'
+      + 'places.googleMapsUri,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.priceLevel,'
+      + 'places.regularOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.photos,places.goodForChildren,places.menuForChildren,'
+      + 'places.reviews,places.editorialSummary';    // reviews+editorial ride the same SKU tier (no extra cost)
+    return fetch(PLACES_BASE+'/places:searchNearby', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'X-Goog-Api-Key':placesKey(), 'X-Goog-FieldMask':mask },
+      body: JSON.stringify(body)
+    }).then(chk).then(function(j){ return (j.places||[]).map(mapDetails); });
+  },
+  tasteCheck: function(placeId){                     // lazy dish-notes fetch for saved picks
+    return fetch(PLACES_BASE+'/places/'+encodeURIComponent(placeId), {
+      headers:{ 'X-Goog-Api-Key':placesKey(), 'X-Goog-FieldMask':'editorialSummary,reviews' }
+    }).then(chk).then(function(d){
+      return {
+        editorial: (d.editorialSummary && d.editorialSummary.text) || '',
+        reviews: (d.reviews||[]).slice(0,5).map(function(rv){
+          return { rating: rv.rating||null, text:(rv.text&&rv.text.text)||(rv.originalText&&rv.originalText.text)||'' };
+        })
+      };
+    });
+  },
+  details: function(placeId, token){
+    var mask = 'id,displayName,formattedAddress,addressComponents,location,googleMapsUri,'
+      + 'primaryTypeDisplayName,rating,userRatingCount,priceLevel,regularOpeningHours,'
+      + 'nationalPhoneNumber,websiteUri,photos,goodForChildren,menuForChildren';
+    var url = PLACES_BASE+'/places/'+encodeURIComponent(placeId)+(token?('?sessionToken='+encodeURIComponent(token)):'');
+    return fetch(url, { headers:{ 'X-Goog-Api-Key':placesKey(), 'X-Goog-FieldMask':mask } })
+      .then(chk).then(mapDetails);
+  },
+  photo: function(photoName){
+    var url = PLACES_BASE+'/'+photoName+'/media?maxWidthPx=800&skipHttpRedirect=true';
+    return fetch(url, { headers:{ 'X-Goog-Api-Key':placesKey() } }).then(chk).then(function(j){ return j.photoUri; });
+  },
+  openCheck: function(placeId){
+    var mask = 'currentOpeningHours.openNow,currentOpeningHours,businessStatus';
+    return fetch(PLACES_BASE+'/places/'+encodeURIComponent(placeId), {
+      headers:{ 'X-Goog-Api-Key':placesKey(), 'X-Goog-FieldMask':mask }
+    }).then(chk);
+  }
+};
+function chk(r){ if (!r.ok) return r.text().then(function(t){ throw new Error(r.status+' '+t); }); return r.json(); }
+var PRICE_ENUM = { PRICE_LEVEL_INEXPENSIVE:1, PRICE_LEVEL_MODERATE:2, PRICE_LEVEL_EXPENSIVE:3, PRICE_LEVEL_VERY_EXPENSIVE:3 };
+function mapDetails(d){
+  var loc = d.location || {};
+  var suburb = '';
+  (d.addressComponents||[]).forEach(function(c){ if ((c.types||[]).indexOf('locality') !== -1 && !suburb) suburb = c.longText || c.shortText || ''; });
+  var cuisine = (d.primaryTypeDisplayName && d.primaryTypeDisplayName.text) || '';
+  cuisine = cuisine.replace(/\s+Restaurant$/i,'').trim();
+  var roh = d.regularOpeningHours || {};
+  var rec = {
+    placeId: d.id,
+    name: (d.displayName && d.displayName.text) || '',
+    cuisine: cuisine,
+    priceLevel: (d.priceLevel && PRICE_ENUM[d.priceLevel]) || null,
+    suburb: suburb,
+    address: d.formattedAddress || '',
+    lat: (loc.latitude != null ? loc.latitude : null),
+    lng: (loc.longitude != null ? loc.longitude : null),
+    mapsUri: d.googleMapsUri || '',
+    phone: d.nationalPhoneNumber || '',
+    website: d.websiteUri || '',
+    rating: d.rating || null,
+    ratingCount: d.userRatingCount || null,
+    kidFriendly: !!(d.goodForChildren || d.menuForChildren),
+    photoName: (d.photos && d.photos[0] && d.photos[0].name) || null,
+    hours: (roh.periods || roh.weekdayDescriptions) ? {
+      periods: roh.periods || [],
+      text: roh.weekdayDescriptions || [],
+      fetchedAt: Date.now()
+    } : null,
+    editorial: (d.editorialSummary && d.editorialSummary.text) || '',    // in-memory only, not persisted raw
+    reviews: (d.reviews||[]).slice(0,5).map(function(rv){
+      return { rating: rv.rating||null, text:(rv.text&&rv.text.text)||(rv.originalText&&rv.originalText.text)||'' };
+    })
+  };
+  return rec;
+}
+
+/* ==================== device-local state ==================== */
+var user = localStorage.getItem('lt-user') || '';
+var dist = localStorage.getItem('lt-dist') || 'any';        // remembered: near|mid|any
+var meal = clockMeal();                                      // auto from clock each load
+var mealOn = true;                                           // meal-window filter active
+var openNow = isWeekend();                                   // defaults ON on weekends
+var ratingMin = 4;                                           // rating floor on the saved-list draw: 0=off, else 4 / 4.3 / 4.5
+var kidOn = true;                                            // kid-friendly filter, default-on (toggleable, not baked into a mode)
+var cuisines = {};                                           // session only (set of cuisine strings)
+var prices = {};                                             // session only (set of 1/2/3)
+
+/* draw session */
+var draw = { active:false, options:[], firstSet:[], reshuffleUsed:false, pick:null };
+/* discovery session — the suggest funnel. stage 'broad' (up to 15 rows) -> 'final' (3 cards -> wheel) */
+var nearby = { active:false, loading:false, error:false, stage:'broad', wide:false,
+  raw:[], pool:[], broad:[], selected:{}, final:[], shown:{}, fetchedAt:0, cuisineOverride:null };
+
+/* ==================== app state (synced) ==================== */
+var state = null;
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function clockMeal(){ return (new Date()).getHours() < 15 ? 'lunch' : 'dinner'; }
+function isWeekend(){ var d = (new Date()).getDay(); return d === 0 || d === 6; }
+
+/* safe getters (Firebase drops empty nodes) */
+function settings(){ return (state && state.settings) || {}; }
+function home(){ return settings().home || null; }
+function nearKm(){ return settings().nearKm || DEFAULT_NEAR; }
+function midKm(){ return settings().midKm || DEFAULT_MID; }
+function placesObj(){ return (state && state.places) || {}; }
+function placesArr(){
+  var o = placesObj();
+  return Object.keys(o).map(function(id){ var p = o[id]; p = p || {}; return Object.assign({ id:id }, p); });
+}
+function place(id){ return placesObj()[id] || null; }
+
+/* ==================== storage layer ==================== */
+var Store = { mode:'local', ref:null };
+
+function applyLocalPatch(obj){
+  Object.keys(obj).forEach(function(path){
+    var parts = path.split('/'), node = state;
+    for (var i=0;i<parts.length-1;i++){
+      if (typeof node[parts[i]] !== 'object' || node[parts[i]] === null) node[parts[i]] = {};
+      node = node[parts[i]];
+    }
+    var leaf = parts[parts.length-1];
+    if (obj[path] === null) delete node[leaf];
+    else node[leaf] = obj[path];
+  });
+}
+Store.patch = function(obj){
+  if (Store.mode === 'cloud' && Store.ref){
+    Store.ref.update(obj);                    // local events fire immediately (latency compensation)
+  } else {
+    applyLocalPatch(obj);
+    localStorage.setItem('lt-state', JSON.stringify(state));
+    render();
+  }
+};
+
+function tableKey(){
+  var m = (location.hash||'').match(/k=([A-Za-z0-9_-]{8,})/);
+  if (m){ localStorage.setItem('lt-key', m[1]); }
+  return localStorage.getItem('lt-key') || '';
+}
+
+function seedState(){ return { settings:{ nearKm:DEFAULT_NEAR, midKm:DEFAULT_MID }, places:{} }; }
+
+function loadScript(src){
+  return new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+function initCloud(key){
+  return loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js')
+    .then(function(){ return loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js'); })
+    .then(function(){
+      firebase.initializeApp(window.FIREBASE_CONFIG);
+      Store.ref = firebase.database().ref('luckytable/'+key);
+      Store.mode = 'cloud';
+      return new Promise(function(res){
+        Store.ref.on('value', function(snap){
+          var v = snap.val();
+          if (!v){ Store.ref.set(seedState()); return; }   // brand-new table: seed it
+          state = v;
+          localStorage.setItem('lt-state', JSON.stringify(state));
+          document.getElementById('modebanner').classList.remove('show');
+          res();
+          render();
+        });
+      });
+    });
+}
+function initLocal(){
+  try { state = JSON.parse(localStorage.getItem('lt-state')||'null'); } catch(e){ state = null; }
+  if (!state) state = seedState();
+  localStorage.setItem('lt-state', JSON.stringify(state));
+  return Promise.resolve();
+}
+
+/* ==================== helpers ==================== */
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function cuisineEmoji(cuisine){
+  var n = String(cuisine||'').toLowerCase();
+  for (var i=0;i<CUISINE_EMOJI.length;i++){ if (n.indexOf(CUISINE_EMOJI[i][0]) !== -1) return CUISINE_EMOJI[i][1]; }
+  return '🍽️';
+}
+function priceLabel(lvl){ return lvl == null ? '?' : ('$'.repeat(lvl)); }
+function haversine(a, b){
+  if (!a || !b) return null;
+  var R = 6371, toR = Math.PI/180;
+  var dLat = (b.lat-a.lat)*toR, dLng = (b.lng-a.lng)*toR;
+  var la1 = a.lat*toR, la2 = b.lat*toR;
+  var h = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function driveMins(p){
+  var h = home(); if (!h || p.lat == null) return null;
+  var km = haversine(h, { lat:p.lat, lng:p.lng });
+  if (km == null) return null;
+  return Math.max(2, Math.round(km * 2.2));      // straight-line km x 2.2 fudge (no Directions API)
+}
+function monthsOnList(p){
+  if (!p.addedAt) return null;
+  var m = Math.floor((Date.now()-p.addedAt)/(30*24*60*60*1000));
+  return m;
+}
+function ageCaption(p){
+  var m = monthsOnList(p);
+  if (m == null) return '';
+  if (m < 1) return 'added recently';
+  return 'on the list ' + m + (m === 1 ? ' month' : ' months');
+}
+
+/* opening-hours math against stored periods (Google day: 0=Sun..6=Sat, matches JS getDay) */
+function isOpenAt(p, day, mins){
+  var periods = p.hours && p.hours.periods;
+  if (!periods || !periods.length) return true;    // unknown hours never silently exclude (e.g. manual adds)
+  for (var i=0;i<periods.length;i++){
+    var per = periods[i], o = per.open, c = per.close;
+    if (!o) continue;
+    if (!c){ if (o.day === day) return true; continue; }   // open with no close = open all that day
+    var oMin = o.hour*60 + (o.minute||0), cMin = c.hour*60 + (c.minute||0);
+    if (c.day === o.day){
+      if (o.day === day && mins >= oMin && mins < cMin) return true;
+    } else {                                                  // period crosses midnight
+      if (o.day === day && mins >= oMin) return true;
+      if (c.day === day && mins < cMin) return true;
+    }
+  }
+  return false;
+}
+function openInMealWindow(p, m){
+  var win = MEAL_WIN[m], day = (new Date()).getDay();
+  var start = win[0], mid = Math.round((win[0]+win[1])/2), end = win[1]-1;
+  return isOpenAt(p, day, start) || isOpenAt(p, day, mid) || isOpenAt(p, day, end);
+}
+function openRightNow(p){
+  var d = new Date();
+  return isOpenAt(p, d.getDay(), d.getHours()*60 + d.getMinutes());
+}
+
+var toastTimer = null;
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+}
+function confetti(big){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var n = big ? 34 : 20;
+  for (var i=0;i<n;i++){
+    var el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.background = WEDGE[i % WEDGE.length];
+    document.body.appendChild(el);
+    var x0 = window.innerWidth/2, y0 = window.innerHeight*0.3;
+    var dx = (Math.random()-0.5)*window.innerWidth*0.9;
+    var dy = window.innerHeight*(0.5+Math.random()*0.4);
+    var rot = (Math.random()-0.5)*720;
+    var anim = el.animate([
+      { transform:'translate('+x0+'px,'+y0+'px) rotate(0deg)', opacity:1 },
+      { transform:'translate('+(x0+dx)+'px,'+(y0+dy)+'px) rotate('+rot+'deg)', opacity:0 }
+    ], { duration: 900+Math.random()*700, easing:'cubic-bezier(.15,.6,.4,1)' });
+    anim.onfinish = (function(node){ return function(){ node.remove(); }; })(el);
+  }
+}
+function photoHtml(p, cls){
+  var emoji = cuisineEmoji(p.cuisine);
+  if (p.photoUri){
+    return '<div class="'+cls+'"><img src="'+esc(p.photoUri)+'" alt="" '
+      + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+      + '<div class="ph-emoji" style="display:none">'+emoji+'</div></div>';
+  }
+  return '<div class="'+cls+'"><div class="ph-emoji" style="display:flex">'+emoji+'</div></div>';
+}
+
+/* ==================== pool + draw (spec section 4) ==================== */
+/* opts flags let us drop one filter at a time for empty-pool relaxation */
+function computePool(opts){
+  opts = opts || {};
+  var ex = opts.excludeIds || {};
+  var h = home();
+  var ring = null;
+  if (!opts.ignoreDistance && dist !== 'any' && h) ring = (dist === 'near' ? nearKm() : midKm());
+  var cuKeys = Object.keys(cuisines), prKeys = Object.keys(prices);
+  return placesArr().filter(function(p){
+    if (p.visitedAt) return false;
+    if (p.blocked) return false;
+    if (isBannedCuisine(p.cuisine)) return false;
+    if (!opts.ignoreKid && kidOn && !p.kidFriendly) return false;
+    if (!opts.ignoreMeal && mealOn && !openInMealWindow(p, meal)) return false;
+    if (!opts.ignoreOpenNow && openNow && !openRightNow(p)) return false;
+    if (ring != null){
+      var d = driveDistanceKm(p, h);
+      if (d == null || d > ring) return false;      // no coords + a ring on = can't confirm, exclude
+    }
+    if (!opts.ignoreCuisine && cuKeys.length && !cuisines[p.cuisine]) return false;
+    if (!opts.ignorePrice && prKeys.length){
+      if (!(p.priceLevel == null || prices[p.priceLevel])) return false;  // unknown price always passes
+    }
+    if (!opts.ignoreRating && ratingMin > 0 && p.rating != null && p.rating < ratingMin) return false;  // unrated passes (you added it)
+    if (ex[p.id]) return false;
+    return true;
+  });
+}
+function driveDistanceKm(p, h){
+  if (!h || p.lat == null) return null;
+  return haversine(h, { lat:p.lat, lng:p.lng });
+}
+function poolCount(){ return computePool({}).length; }
+
+/* draw pool applies repeat-avoidance on top of the filtered pool */
+function drawPool(excludeIds){
+  var base = computePool({ excludeIds: excludeIds || {} });
+  var lp = state && state.lastPick;
+  if (lp && lp.placeKey && (Date.now() - (lp.at||0)) < RECENT_MS){
+    var without = base.filter(function(p){ return p.id !== lp.placeKey; });
+    if (without.length >= 3) return without;        // only sit it out if 3+ remain
+  }
+  return base;
+}
+function sample(arr, n){
+  var a = arr.slice();
+  for (var i=a.length-1;i>0;i--){ var j = Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a.slice(0, n);
+}
+
+function findOptions(){
+  nearby.active = false;
+  var pool = drawPool();
+  if (pool.length === 0){ draw.active = false; renderSpin(); return; }   // relaxation shown by renderSpin
+  var picks = sample(pool, 3).map(function(p){ return p.id; });
+  draw = { active:true, options:picks, firstSet:picks.slice(), reshuffleUsed:false, pick:null };
+  renderSpin();
+}
+function reshuffle(){
+  if (draw.reshuffleUsed) return;
+  var exclude = {}; draw.firstSet.forEach(function(id){ exclude[id] = true; });
+  var pool = drawPool(exclude);
+  draw.reshuffleUsed = true;
+  /* log a skip on each first-set place for future veto-memory (v2 data) */
+  var patch = {};
+  draw.firstSet.forEach(function(id){ var p = place(id); if (p) patch['places/'+id+'/skips'] = (p.skips||0)+1; });
+  if (Object.keys(patch).length) Store.patch(patch);
+  if (pool.length === 0){
+    toast('That was everything that fits. Pick one or spin the wheel.');
+    return;                                          // keep current options
+  }
+  draw.options = sample(pool, 3).map(function(p){ return p.id; });
+  draw.pick = null;
+  closeOverlay('result-overlay');
+  renderSpin();
+}
+
+/* ==================== discovery: the suggest funnel ==================== */
+/* broad (up to 15 rows) -> final 3 (cards) -> wheel -> winner. Winner is saved, losers are not. */
+var DISH_DICT = ['dumplings','dumpling','pho','ramen','pad thai','pad see ew','banh mi','pizza','pasta','carbonara','gnocchi','risotto','lasagne','parma','parmigiana','souvlaki','gyros','brisket','ribs','wings','laksa','karaage','katsu','sushi','sashimi','nigiri','tempura','bibimbap','bulgogi','tacos','burrito','quesadilla','nachos','burger','cheeseburger','fries','curry','butter chicken','biryani','naan','samosa','tikka','banh xeo','spring rolls','spring roll','dim sum','wonton','noodles','noodle','fried rice','peking duck','pork belly','oysters','prawns','calamari','fish and chips','paella','gelato','tiramisu','cannoli','falafel','hummus','shawarma','kebab','bao','gyoza','okonomiyaki','udon','soba','massaman','green curry','red curry','tom yum','satay','rendang','nasi goreng'];
+
+function nearbyRadiusM(){
+  var base = dist === 'near' ? nearKm()*1000 : dist === 'mid' ? midKm()*1000 : 10000;
+  return nearby.wide ? base*2 : base;            // "Search wider" doubles the ring, session-local (never touches the saved dist pref)
+}
+function discoveryBtnsHtml(){
+  if (!placesKeyReady()) return '';
+  return '<button class="findbtn" id="surprisebtn">Let’s OG</button>'
+    + '<button class="cuisinebtn" id="cuisinespin">Spin a cuisine \u{1F3B2}</button>';
+}
+/* "Let's OG" (Google discovery) is primary when available; Jenny's Hit List (saved list)
+   is the secondary pick, unless no Places key is set, in which case it's the only — and primary — option. */
+function jennysChoiceBtnHtml(){
+  var cls = placesKeyReady() ? 'surprisebtn' : 'findbtn';
+  var n = poolCount();
+  return '<button class="'+cls+'" id="findbtn">Jenny’s Hit List'
+    + '<span class="btnsub">'+n+' place'+(n===1?'':'s')+' in the running</span></button>';
+}
+/* idle-home rail: the saved list's crowd-pleasers (4.5★+, 300+ reviews), most-reviewed first.
+   Shows RAIL_FIRST cards; each "Show more" tap reveals RAIL_STEP more, max RAIL_CLICKS taps (session-local). */
+var RAIL_FIRST = 6, RAIL_STEP = 5, RAIL_CLICKS = 3;
+var railClicks = 0;
+function popularRail(){
+  var pops = placesArr().filter(function(p){
+    return !p.visitedAt && !p.blocked && !isBannedCuisine(p.cuisine)
+      && p.rating != null && p.rating >= 4.5 && (p.ratingCount||0) >= 300;
+  }).sort(function(a,b){ return (b.ratingCount||0) - (a.ratingCount||0); });
+  if (!pops.length) return '';
+  var shown = pops.slice(0, RAIL_FIRST + railClicks * RAIL_STEP);
+  var html = '<h2>Most popular <small>4.5&#9733;+ · 300+ reviews</small></h2><div class="rail">';
+  shown.forEach(function(p){
+    html += '<div class="railcard" data-rail="'+p.id+'">' + photoHtml(p, 'railphoto')
+      + '<div class="railname">'+esc(p.name)+'</div>'
+      + '<div class="railmeta">&#9733; '+p.rating+' ('+p.ratingCount+') · '+priceLabel(p.priceLevel)+'</div></div>';
+  });
+  var left = pops.length - shown.length;
+  if (left > 0 && railClicks < RAIL_CLICKS){
+    html += '<div class="railcard" data-railmore="1"><div class="railmorebox">'
+      + '<span class="arr">&#8594;</span>Show more<span class="cnt">+'+Math.min(RAIL_STEP, left)+' more</span>'
+      + '</div></div>';
+  }
+  return html + '</div>';
+}
+function nearbyIncludedTypes(){
+  if (nearby.cuisineOverride) return [nearby.cuisineOverride];
+  var keys = Object.keys(cuisines);
+  if (!keys.length) return ['restaurant'];
+  var types = [];
+  for (var i=0;i<keys.length;i++){ var t = cuisineType(keys[i]); if (!t) return ['restaurant']; if (types.indexOf(t) === -1) types.push(t); }
+  return types;
+}
+/* soft family filter (kid-ok badged, not required); hard 4-star gate; dedupe vs the saved list.
+   Cuisine is filtered SERVER-side via includedPrimaryTypes — no client re-check (Google's label
+   "Vietnamese" never equals the chip "Viet", which used to silently zero out every result). */
+function nearbyFilter(recs){
+  var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
+  var prKeys = Object.keys(prices);
+  return recs.filter(function(r){
+    if (!r.placeId || saved[r.placeId]) return false;
+    if (isBannedCuisine(r.cuisine)) return false;
+    if (r.rating == null || r.rating < MIN_RATING) return false;              // discovery: no vouch, no slot
+    if (mealOn && !openInMealWindow(r, meal)) return false;
+    if (openNow && !openRightNow(r)) return false;
+    if (prKeys.length && !(r.priceLevel == null || prices[r.priceLevel])) return false;
+    return true;
+  });
+}
+function nearbyReset(){
+  nearby = { active:false, loading:false, error:false, stage:'broad', wide:false,
+    raw:[], pool:[], broad:[], selected:{}, final:[], shown:{}, fetchedAt:0, cuisineOverride:null };
+}
+function findNearby(){
+  if (nearby.loading) return;
+  if (!placesKeyReady()) return;
+  if (!home()){ openHome(); return; }
+  nearby.loading = true; nearby.error = false; nearby.active = true; draw.active = false;
+  renderDiscovery(document.getElementById('spinaction'));      // skeleton rows
+  var h = home();
+  Places.nearby({
+    includedPrimaryTypes: nearbyIncludedTypes(),
+    excludedPrimaryTypes: ['fast_food_restaurant'],            // discovery is for new sit-down spots, not chains
+    maxResultCount: 20, rankPreference: 'POPULARITY', languageCode: 'en-AU', regionCode: 'au',
+    locationRestriction: { circle: { center:{ latitude:h.lat, longitude:h.lng }, radius: nearbyRadiusM() } }
+  }).then(function(recs){
+    nearby.loading = false; nearby.fetchedAt = Date.now();
+    nearby.raw = recs;
+    nearby.pool = nearbyFilter(recs);
+    nearby.shown = {};
+    nearby.broad = sample(nearby.pool, NEARBY_MAX);            // whole pool when <15; always populated for "back to the long list"
+    nearby.broad.forEach(function(r){ nearby.shown[r.placeId] = true; });
+    nearby.selected = {};
+    if (nearby.pool.length && nearby.pool.length <= 3){        // 1-3 found: skip the shortlist, go straight to the wheel set
+      nearby.final = nearby.broad.slice();
+      nearby.stage = 'final';
+      renderSpin(); loadFinalPhotos();
+    } else {                                                    // 0 -> broad empty state (widen/clear-cuisine recovery); >3 -> the 15
+      nearby.stage = 'broad';
+      renderSpin(); loadBroadPhotos();
+    }
+  }).catch(function(){
+    nearby.loading = false; nearby.error = true;
+    renderSpin();
+  });
+}
+function toggleBroadPick(pid){
+  if (nearby.selected[pid]){ delete nearby.selected[pid]; }
+  else {
+    if (Object.keys(nearby.selected).length >= 3){ toast('Three’s the magic number — tap one off first'); return; }
+    nearby.selected[pid] = true;
+  }
+  renderDiscovery(document.getElementById('spinaction'));
+}
+function selectedRecs(){ return nearby.broad.filter(function(r){ return nearby.selected[r.placeId]; }); }
+function goFinal(recs){
+  nearby.final = recs;
+  nearby.stage = 'final';
+  renderSpin();
+  loadFinalPhotos();
+}
+function autoPickThree(){ goFinal(sample(nearby.broad, Math.min(3, nearby.broad.length))); }
+function moreFifteen(){
+  var rest = nearby.pool.filter(function(r){ return !nearby.shown[r.placeId]; });
+  if (!rest.length){ toast('That’s everything nearby — spin what you’ve got.'); return; }
+  nearby.broad = sample(rest, NEARBY_MAX);
+  nearby.broad.forEach(function(r){ nearby.shown[r.placeId] = true; });
+  nearby.selected = {};
+  renderDiscovery(document.getElementById('spinaction'));
+  loadBroadPhotos();
+}
+/* broad stage: resolve photos for the 15 shown rows only (one cheap media call each, cached on the rec) */
+function loadBroadPhotos(){
+  if (!placesKeyReady()) return;
+  nearby.broad.forEach(function(r){
+    if (r.photoUri || !r.photoName) return;
+    Places.photo(r.photoName).then(function(uri){
+      r.photoUri = uri;
+      if (nearby.active && nearby.stage === 'broad') renderDiscovery(document.getElementById('spinaction'));
+    }).catch(function(){});
+  });
+}
+function loadFinalPhotos(){
+  nearby.final.forEach(function(r){
+    if (r.photoUri || !r.photoName) return;
+    Places.photo(r.photoName).then(function(uri){
+      r.photoUri = uri;
+      if (nearby.active && nearby.stage === 'final') renderDiscovery(document.getElementById('spinaction'));
+    }).catch(function(){});
+  });
+}
+function nearbyRec(placeId){
+  var pools = nearby.pool.concat(nearby.final);
+  for (var i=0;i<pools.length;i++){ if (pools[i].placeId === placeId) return pools[i]; }
+  return null;
+}
+function buildDiscoveryRec(rec){
+  var base = {
+    placeId: rec.placeId, name: rec.name, cuisine: rec.cuisine, priceLevel: rec.priceLevel,
+    suburb: rec.suburb, address: rec.address, lat: rec.lat, lng: rec.lng, mapsUri: rec.mapsUri,
+    phone: rec.phone, website: rec.website, rating: rec.rating, ratingCount: rec.ratingCount,
+    photoUri: rec.photoUri, hours: rec.hours, kidFriendly: rec.kidFriendly,
+    by: user || null, addedAt: Date.now(), visitedAt: null, worthRepeat: null, skips: 0, discovered: true
+  };
+  var td = mineDishes(rec);
+  if (td && (td.dishes.length || td.quotes.length || td.summary)){
+    base.tasteNotes = { summary:td.summary, dishes:td.dishes, quotes:td.quotes, fetchedAt: Date.now() };
+  }
+  Object.keys(base).forEach(function(k){ if (base[k] === undefined) delete base[k]; });
+  return base;
+}
+/* cuisine roulette: spin the same wheel over 6 cuisines, then search that type */
+function spinCuisine(){
+  if (!placesKeyReady()) return;
+  if (!home()){ openHome(); return; }
+  var six = sample(ROULETTE, 6);
+  var entries = six.map(function(c){ return { label:c[0], emoji:cuisineEmoji(c[0]), value:c }; });
+  document.getElementById('wheel-h3').textContent = 'What are we feeling?';
+  openWheel(entries, function(picked){
+    nearby.cuisineOverride = picked[1];
+    nearby.wide = false;                          // fresh search, don't inherit a previous widen
+    toast(picked[0] + ' it is');
+    findNearby();
+  });
+}
+/* "what people say" — honest: mined from the up-to-5 reviews + editorial summary, never fabricated dish data */
+/* precompiled word-boundary matchers so 'pho' doesn't match "photo"/"phone" */
+var DISH_RE = DISH_DICT.map(function(t){ return [t, new RegExp('\\b'+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b')]; });
+function mineDishes(rec){
+  var out = { summary: (rec.editorial||''), dishes:[], quotes:[] };
+  var reviews = rec.reviews || [];
+  if (!reviews.length) return out;
+  var texts = reviews.map(function(rv){ return String(rv.text||'').toLowerCase(); });
+  var counts = {};
+  DISH_RE.forEach(function(pair){
+    var inN = 0;
+    texts.forEach(function(t){ if (pair[1].test(t)) inN++; });
+    if (inN >= 2) counts[pair[0]] = inN;                                      // must appear in 2+ reviews
+  });
+  out.dishes = Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; }).slice(0,4);
+  var ordered = reviews.slice().sort(function(a,b){ return (b.rating||0)-(a.rating||0); });
+  var cand = [];
+  ordered.forEach(function(rv){
+    String(rv.text||'').split(/[.!?]+\s+/).forEach(function(s){
+      var low = s.toLowerCase();
+      var hit = DISH_RE.some(function(pair){ return pair[1].test(low); }) || /\b(ordered|must try|go for|best|loved the|get the)\b/.test(low);
+      var clean = s.replace(/\s+/g,' ').trim();
+      if (hit && clean.length >= 30 && clean.length <= 140) cand.push(clean);
+    });
+  });
+  out.quotes = cand.slice(0,2);
+  return out;
+}
+
+/* ---- discovery rendering ---- */
+function renderDiscovery(host){
+  if (nearby.loading){ renderBroadSkeleton(host); return; }
+  if (nearby.error){
+    host.innerHTML = '<div class="relax"><p>Couldn’t reach Google.</p>'
+      + '<button class="relaxchip" id="nearbyretry">Try again</button>'
+      + '<button class="relaxclear" id="nearbyback">back to your list</button></div>';
+    return;
+  }
+  if (nearby.stage === 'final'){ renderFinal(host); return; }
+  renderBroad(host);
+}
+function renderBroadSkeleton(host){
+  var rows = '';
+  for (var i=0;i<6;i++) rows += '<div class="skelrow"></div>';
+  host.innerHTML = '<div class="stagelabel">Finding somewhere new…</div>' + rows;
+}
+function rouletteLabel(type){
+  for (var i=0;i<ROULETTE.length;i++){ if (ROULETTE[i][1] === type) return ROULETTE[i][0]; }
+  return 'Cuisine';
+}
+function renderBroad(host){
+  var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
+  var km = Math.round(nearbyRadiusM()/1000);
+  if (!nearby.broad.length){
+    var deduped = nearby.raw.filter(function(r){ return r.placeId && !saved[r.placeId]; });
+    var msg;
+    if (!nearby.raw.length) msg = 'No restaurants found within ' + km + ' km.';
+    else if (!deduped.length) msg = 'You’ve already saved the good ones nearby. Nice work.';
+    else msg = 'Nothing new fits those filters within ' + km + ' km.';    // could be rating, meal, open-now, price or cuisine
+    var canWiden = !nearby.wide;
+    host.innerHTML = '<div class="relax"><p>' + msg + '</p>'
+      + (nearby.cuisineOverride ? '<button class="relaxchip" id="nclearcuisine">Clear the cuisine</button>' : '')
+      + (canWiden ? '<button class="relaxchip" id="nearbywiden">Search wider</button>' : '')
+      + '<button class="relaxclear" id="nearbyback">back to your list</button></div>';
+    return;
+  }
+  var cnt = Object.keys(nearby.selected).length;
+  var html = '<div class="stagelabel">The field · ' + nearby.broad.length + ' new within ' + km + ' km</div>';
+  if (nearby.cuisineOverride){
+    html += '<div class="ovchip" id="nclearcuisine">' + esc(rouletteLabel(nearby.cuisineOverride)) + ' <span>×</span></div>';
+  }
+  html += '<div class="brlist">';
+  nearby.broad.forEach(function(r){
+    var sel = !!nearby.selected[r.placeId];
+    var meta = [];
+    if (r.cuisine) meta.push(esc(r.cuisine));
+    meta.push('<span class="pricebadge">' + priceLabel(r.priceLevel) + '</span>');
+    if (r.suburb) meta.push(esc(r.suburb));
+    var dm = driveMins(r); if (dm != null) meta.push(dm + ' min');
+    if (r.rating) meta.push('<span class="ratebadge">★ ' + r.rating + '</span>');
+    if (r.kidFriendly) meta.push('<span class="kidbadge">kid-ok</span>');
+    html += '<div class="brow' + (sel?' sel':'') + '" data-bpick="' + esc(r.placeId) + '">'
+      + photoHtml(r, 'bphoto')
+      + '<div class="brbody"><div class="name">' + esc(r.name) + '</div>'
+      + '<div class="meta">' + meta.join('<span class="sep">·</span>') + '</div></div>'
+      + '<div class="brtick">' + (sel?'✓':'') + '</div></div>';
+  });
+  html += '</div>';
+  html += '<div class="pickbar">';
+  html += '<div class="pickcount">' + (cnt ? cnt + ' of 3 picked' : 'Pick up to 3, or let it choose') + '</div>';
+  if (cnt >= 2) html += '<button class="findbtn" id="npickspin">Spin these ' + cnt + '</button>';
+  html += '<button class="surprisebtn" id="nauto">Surprise me — pick 3</button>';
+  html += '<div class="pickquiet"><button id="nmore15">show a different 15</button><button id="nearbyback">back to your list</button></div>';
+  html += '</div>';
+  host.innerHTML = html;
+}
+function renderFinal(host){
+  var html = '<div class="stagelabel">Your three · tap one, or spin</div><div class="options">';
+  nearby.final.forEach(function(r){
+    var bits = [];
+    if (r.cuisine) bits.push(esc(r.cuisine));
+    bits.push('<span class="pricebadge">' + priceLabel(r.priceLevel) + '</span>');
+    if (r.kidFriendly) bits.push('<span class="kidbadge">kid-ok</span>');
+    var meta2 = [];
+    if (r.suburb) meta2.push(esc(r.suburb));
+    var dm = driveMins(r); if (dm != null) meta2.push(dm + ' min drive');
+    if (r.rating) meta2.push('<span class="ratebadge">★ ' + r.rating + (r.ratingCount?' ('+r.ratingCount+')':'') + '</span>');
+    html += '<div class="optcard ncard" data-fopen="' + esc(r.placeId) + '"><div class="ntop">'
+      + photoHtml(r, 'photo').replace(/<\/div>$/, '<span class="newbadge">new</span></div>')
+      + '<div class="optbody"><div class="name">' + esc(r.name) + '</div>'
+      + '<div class="meta">' + bits.join('<span class="sep">·</span>') + '</div>'
+      + '<div class="meta">' + meta2.join('<span class="sep">·</span>') + '</div></div></div></div>';
+  });
+  html += '</div>';
+  if (nearby.final.length >= 2) html += '<button class="spindecide" id="nspin">Spin the wheel</button>';
+  html += '<button class="findagain" id="nbackbroad">back to the long list</button>';
+  host.innerHTML = html;
+}
+
+/* ==================== render ==================== */
+function render(){
+  if (!state) return;
+  document.getElementById('subtag').textContent = placesArr().filter(function(p){return !p.visitedAt;}).length + ' on the list';
+  renderSpin();
+  renderList();
+}
+
+function mealVerb(){ return meal === 'lunch' ? 'lunch' : 'dinner'; }
+
+function chipHtml(kind, label, on){
+  return '<button class="chip'+(on?' on':'')+'" data-fs="'+kind+'">'+label+' <span class="caret">&#9660;</span></button>';
+}
+function renderFilters(){
+  var cuKeys = Object.keys(cuisines), prKeys = Object.keys(prices);
+  var cuLbl = !cuKeys.length ? 'Cuisine' : (cuKeys.length === 1 ? esc(cuKeys[0]) : 'Cuisine · '+cuKeys.length);
+  var prLbl = !prKeys.length ? 'Price' : (prKeys.length === 1 ? '$'.repeat(+prKeys[0]) : 'Price · '+prKeys.length);
+  var moreN = (mealOn?1:0) + (openNow?1:0) + (kidOn?1:0);
+  document.getElementById('filterbar').innerHTML =
+      chipHtml('dist', dist === 'any' ? 'Distance' : '&lt; '+(dist === 'near' ? nearKm() : midKm())+' km', dist !== 'any')
+    + chipHtml('cuisine', cuLbl, cuKeys.length > 0)
+    + chipHtml('price', prLbl, prKeys.length > 0)
+    + chipHtml('rating', ratingMin > 0 ? ratingMin+'+ &#9733;' : 'Rating', ratingMin > 0)
+    + chipHtml('more', moreN ? 'More · '+moreN : 'More', moreN > 0);
+}
+
+/* ==================== filter sheets (draft state, deferred Apply) ==================== */
+var FS_TITLES = { dist:'Distance', cuisine:'Cuisine', price:'Price', rating:'Rating', more:'More filters' };
+var fs = { kind:null, draft:null };
+function fsSnapshot(){
+  return { dist:dist, meal:meal, mealOn:mealOn, openNow:openNow, kidOn:kidOn, ratingMin:ratingMin,
+           cuisines:Object.assign({}, cuisines), prices:Object.assign({}, prices) };
+}
+function fsApplyGlobals(d){
+  dist = d.dist; meal = d.meal; mealOn = d.mealOn; openNow = d.openNow;
+  kidOn = d.kidOn; ratingMin = d.ratingMin; cuisines = d.cuisines; prices = d.prices;
+}
+/* pool size the draft WOULD give — swap globals in, count, swap back (sync, so safe) */
+function computePoolDraft(d){
+  var s = fsSnapshot();
+  fsApplyGlobals(d);
+  var n = computePool({}).length;
+  fsApplyGlobals(s);
+  return n;
+}
+function openFilterSheet(kind){
+  fs.kind = kind; fs.draft = fsSnapshot();
+  document.getElementById('fs-title').textContent = FS_TITLES[kind];
+  renderFilterSheet();
+  document.getElementById('filter-overlay').classList.add('show');
+}
+function closeFilterSheet(){ fs.kind = null; fs.draft = null; closeOverlay('filter-overlay'); }
+function fsPill(key, val, label, on){
+  return '<button class="fs-pill'+(on?' on':'')+'" data-fspill="'+key+'" data-fsval="'+val+'">'+label+'</button>';
+}
+function fsToggleRow(key, label, on){
+  return '<div class="fs-row'+(on?' on':'')+'" data-fstoggle="'+key+'"><span>'+label+'</span><span class="fs-tick">'+(on?'&#10003;':'')+'</span></div>';
+}
+function renderFilterSheet(){
+  var d = fs.draft, html = '';
+  if (fs.kind === 'dist'){
+    html = '<div class="fs-pills">'
+      + fsPill('dist','near','&lt; '+nearKm()+' km', d.dist === 'near')
+      + fsPill('dist','mid','&lt; '+midKm()+' km', d.dist === 'mid')
+      + fsPill('dist','any','Anywhere', d.dist === 'any') + '</div>';
+  } else if (fs.kind === 'cuisine'){
+    var counts = {};
+    placesArr().forEach(function(p){ if (!p.visitedAt && !p.blocked && p.cuisine) counts[p.cuisine] = (counts[p.cuisine]||0)+1; });
+    var keys = Object.keys(counts).sort();
+    html = keys.length
+      ? '<div class="fs-list">' + keys.map(function(c){
+          return '<div class="fs-row'+(d.cuisines[c]?' on':'')+'" data-fsv="'+esc(c)+'">'
+            + '<span>'+esc(c)+' <span class="fs-sub">'+counts[c]+'</span></span>'
+            + '<span class="fs-tick">'+(d.cuisines[c]?'&#10003;':'')+'</span></div>';
+        }).join('') + '</div>'
+      : '<p>Add places to filter by cuisine.</p>';
+  } else if (fs.kind === 'price'){
+    html = '<div class="fs-pills">' + [1,2,3].map(function(pl){
+      return fsPill('price', pl, '$'.repeat(pl), !!d.prices[pl]);
+    }).join('') + '</div>';
+  } else if (fs.kind === 'rating'){
+    html = '<div class="fs-pills">'
+      + fsPill('rating', 0, 'Off', d.ratingMin === 0)
+      + [4, 4.3, 4.5].map(function(r){ return fsPill('rating', r, r+'+ &#9733;', d.ratingMin === r); }).join('')
+      + '</div>';
+  } else if (fs.kind === 'more'){
+    html = '<div class="fs-list">'
+      + fsToggleRow('open', 'Open now', d.openNow)
+      + fsToggleRow('kid', 'Kid-friendly', d.kidOn)
+      + '</div>'
+      + '<div class="fs-label">Meal window</div>'
+      + '<div class="fs-pills">'
+      + fsPill('meal','off','Off', !d.mealOn)
+      + fsPill('meal','lunch','Lunch', d.mealOn && d.meal === 'lunch')
+      + fsPill('meal','dinner','Dinner', d.mealOn && d.meal === 'dinner')
+      + '</div>';
+  }
+  document.getElementById('fs-body').innerHTML = html;
+  var n = computePoolDraft(d);
+  document.getElementById('fs-apply').textContent = 'Apply · '+n+' place'+(n === 1 ? '' : 's');
+}
+function fsResetDraft(){
+  var d = fs.draft;
+  if (fs.kind === 'dist') d.dist = 'any';
+  else if (fs.kind === 'cuisine') d.cuisines = {};
+  else if (fs.kind === 'price') d.prices = {};
+  else if (fs.kind === 'rating') d.ratingMin = 0;
+  else if (fs.kind === 'more'){ d.openNow = false; d.kidOn = false; d.mealOn = false; }
+}
+
+function renderSpin(){
+  if (!state) return;
+  /* hide the + FAB during the broad funnel so it can't sit on top of the sticky pick bar (CSS-gated to the spin tab) */
+  document.body.classList.toggle('funnelbroad', nearby.active && nearby.stage === 'broad');
+  /* never rebuild the spin surface mid-wheel or while a result is up */
+  if (document.getElementById('wheel-overlay').classList.contains('show')) { renderFilters(); return; }
+  renderFilters();
+
+  var n = poolCount();
+  var host = document.getElementById('spinaction');
+  if (document.getElementById('result-overlay').classList.contains('show')){
+    /* keep the surface underneath the result sheet in sync (funnel or options) */
+    (nearby.active ? renderDiscovery(host) : renderOptions(host)); return;
+  }
+
+  if (nearby.active){
+    renderDiscovery(host);
+  } else if (draw.active && draw.options.length){
+    renderOptions(host);
+  } else if (n === 0){
+    renderRelaxation(host);
+  } else {
+    host.innerHTML = popularRail() + discoveryBtnsHtml() + jennysChoiceBtnHtml()
+      + '<div class="homephoto" id="homephoto" style="display:none"><img id="homephotoimg" alt=""></div>';
+    loadHomePhoto();
+  }
+}
+/* Encrypted family photos: AES-256-GCM blobs keyed by SHA-256(table code), so the public
+   repo only carries ciphertext (../encrypt_photos.py makes them). One per day, same on
+   both phones. Missing file / wrong key = the slot just stays hidden. */
+var HOME_PHOTOS = ['photo1.enc', 'photo2.enc'];
+var photoUrlCache = {};   // enc name -> decrypted blob URL
+function loadHomePhoto(){
+  var name = HOME_PHOTOS[Math.floor(Date.now() / 86400000) % HOME_PHOTOS.length];
+  var host = document.getElementById('homephoto');
+  var code = localStorage.getItem('lt-key');
+  if (!host || !code || !window.crypto || !crypto.subtle) return;
+  if (photoUrlCache[name]){ showHomePhoto(photoUrlCache[name]); return; }
+  fetch(name).then(function(r){ if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); })
+    .then(function(buf){
+      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(code))
+        .then(function(hash){ return crypto.subtle.importKey('raw', hash, 'AES-GCM', false, ['decrypt']); })
+        .then(function(key){
+          return crypto.subtle.decrypt({ name:'AES-GCM', iv:new Uint8Array(buf.slice(0,12)) }, key, buf.slice(12));
+        });
+    })
+    .then(function(plain){
+      var url = URL.createObjectURL(new Blob([plain], { type:'image/jpeg' }));
+      photoUrlCache[name] = url;
+      showHomePhoto(url);
+    })
+    .catch(function(){});   // no enc file yet, offline, or wrong key: no photo, no error
+}
+function showHomePhoto(url){
+  var host = document.getElementById('homephoto'), img = document.getElementById('homephotoimg');
+  if (!host || !img) return;
+  img.src = url; host.style.display = '';
+}
+
+function renderOptions(host){
+  var live = draw.options.map(function(id){ return place(id) ? id : null; }).filter(Boolean);
+  if (!live.length){ host.innerHTML = jennysChoiceBtnHtml(); draw.active=false; return; }
+  var html = '<div class="optlabel">Tap one, or let the wheel decide</div><div class="options">';
+  live.forEach(function(id){
+    var p = place(id);
+    var bits = [];
+    if (p.rating) bits.push('<span class="ratebadge">★ '+p.rating+'</span>');
+    bits.push('<span class="pricebadge">'+priceLabel(p.priceLevel)+'</span>');
+    if (p.cuisine) bits.push(esc(p.cuisine));
+    if (p.suburb) bits.push(esc(p.suburb));
+    var dm = driveMins(p); if (dm != null) bits.push(dm+' min drive');
+    html += '<div class="optcard" data-opt="'+id+'">'
+      + photoHtml(p, 'photo')
+      + '<div class="optbody"><div class="name">'+esc(p.name)+'</div>'
+      + '<div class="meta">'+bits.join('<span class="sep">·</span>')+'</div></div></div>';
+  });
+  html += '</div>';
+  if (live.length >= 2) html += '<button class="spindecide" id="spindecide">Spin to decide</button>';
+  html += '<button class="findagain" id="findagain">start over</button>';
+  host.innerHTML = html;
+}
+
+function renderRelaxation(host){
+  /* raw pool = visited/blocked only, everything else off */
+  var raw = placesArr().filter(function(p){ return !p.visitedAt && !p.blocked; }).length;
+  if (raw < 3){
+    host.innerHTML = '<div class="relax"><p>The list is running dry. Add a couple of places.</p>'
+      + '<button class="relaxchip" id="relax-add">Add a place</button>'
+      + discoveryBtnsHtml() + '</div>';
+    return;
+  }
+  /* try dropping each active filter individually, pick the one that recovers the most */
+  var tries = [];
+  if (mealOn) tries.push({ key:'meal', label:'Turn off '+mealVerb()+' hours', n:computePool({ignoreMeal:true}).length });
+  if (openNow) tries.push({ key:'open', label:'Turn off Open now', n:computePool({ignoreOpenNow:true}).length });
+  if (ratingMin > 0) tries.push({ key:'rating', label:'Include lower-rated', n:computePool({ignoreRating:true}).length });
+  if (kidOn) tries.push({ key:'kid', label:'Include non-kid-friendly', n:computePool({ignoreKid:true}).length });
+  if (dist !== 'any') tries.push({ key:'dist', label:'Search Anywhere', n:computePool({ignoreDistance:true}).length });
+  if (Object.keys(cuisines).length) tries.push({ key:'cuisine', label:'Clear cuisines', n:computePool({ignoreCuisine:true}).length });
+  if (Object.keys(prices).length) tries.push({ key:'price', label:'Clear price', n:computePool({ignorePrice:true}).length });
+  tries = tries.filter(function(t){ return t.n > 0; }).sort(function(a,b){ return b.n - a.n; });
+  var html = '<div class="relax"><p>Nothing fits those filters right now.</p>';
+  if (tries.length){
+    var best = tries[0];
+    html += '<button class="relaxchip" data-relax="'+best.key+'">'+best.label+' (+'+best.n+')</button>';
+  }
+  html += '<button class="relaxclear" id="relax-clear">clear all filters</button>' + discoveryBtnsHtml() + '</div>';
+  host.innerHTML = html;
+}
+
+function renderList(){
+  var seg = document.querySelector('#listseg button.on');
+  var which = seg ? seg.dataset.seg : 'try';
+  var arr = placesArr().filter(function(p){ return which === 'been' ? !!p.visitedAt : !p.visitedAt; });
+  arr.sort(function(a,b){ return (b.addedAt||0) - (a.addedAt||0); });
+  var host = document.getElementById('listcards');
+  if (!arr.length){
+    host.innerHTML = '<div class="empty-list">'
+      + (which === 'been' ? 'No visits logged yet. Places you mark as visited land here.'
+                          : 'No places yet. Tap + to add the first one you want to try.') + '</div>';
+    return;
+  }
+  host.innerHTML = arr.map(function(p){
+    var meta1 = [];
+    if (p.cuisine) meta1.push(esc(p.cuisine));
+    meta1.push('<span class="pricebadge">'+priceLabel(p.priceLevel)+'</span>');
+    if (p.suburb) meta1.push(esc(p.suburb));
+    if (p.kidFriendly) meta1.push('<span class="kidbadge">kid-ok</span>');
+    if (p.blocked) meta1.push('<span class="blockedbadge">ruled out</span>');
+    var by = p.by && NAMES[p.by] ? '<span class="byline '+esc(p.by)+'">'+NAMES[p.by]+'</span>' : '';
+    var meta2 = [];
+    if (by) meta2.push('by '+by);
+    if (which === 'been'){ meta2.push(p.worthRepeat ? 'worth going back' : (p.worthRepeat===false ? 'not again' : 'visited')); }
+    else { var ac = ageCaption(p); if (ac) meta2.push(ac); }
+    return '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'">'
+      + photoHtml(p, 'photo')
+      + '<div class="listbody"><div class="name">'+esc(p.name)+'</div>'
+      + '<div class="meta">'+meta1.join('<span class="sep">·</span>')+'</div>'
+      + '<div class="meta">'+meta2.join('<span class="sep">·</span>')+'</div></div></div>';
+  }).join('');
+}
+
+/* ==================== wheel (presentational: entries + onPick) ==================== */
+var wheelState = { spinning:false, angle:0 };
+/* pick-context: {src:'saved', id} | {src:'nearby', rec, savedId} */
+function ctxRec(ctx){ return ctx && (ctx.src === 'saved' ? place(ctx.id) : ctx.rec); }
+function sameCtx(a, b){
+  if (!a || !b) return false;
+  return a.src === 'saved' ? (b.src === 'saved' && a.id === b.id)
+                           : (b.src === 'nearby' && a.rec && b.rec && a.rec.placeId === b.rec.placeId);
+}
+function openWheel(entries, onPick){
+  entries = (entries||[]).filter(Boolean);
+  if (entries.length < 2){ if (entries.length === 1) onPick(entries[0].value); return; }
+  var svg = document.getElementById('wheelsvg'), n = entries.length, wA = 360/n, parts = '';
+  for (var i=0;i<n;i++){
+    var a0 = (i*wA-90)*Math.PI/180, a1 = ((i+1)*wA-90)*Math.PI/180, R=160;
+    var x1=R*Math.cos(a0), y1=R*Math.sin(a0), x2=R*Math.cos(a1), y2=R*Math.sin(a1);
+    var color = WEDGE[i % WEDGE.length];
+    parts += '<path d="M0,0 L'+x1.toFixed(1)+','+y1.toFixed(1)+' A'+R+','+R+' 0 '+(wA>180?1:0)+',1 '+x2.toFixed(1)+','+y2.toFixed(1)+' Z" fill="'+color+'" stroke="#0A0A0A" stroke-width="2"/>';
+    var mid = i*wA+wA/2, midRad=(mid-90)*Math.PI/180, tr=98, tx=tr*Math.cos(midRad), ty=tr*Math.sin(midRad);
+    var label = entries[i].label, maxCh=13;
+    if (label.length > maxCh) label = Array.from(label).slice(0,maxCh-1).join('')+'…';
+    var em = entries[i].emoji ? entries[i].emoji+' ' : '';
+    parts += '<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="800" fill="#0A0A0A" transform="rotate('+mid.toFixed(1)+' '+tx.toFixed(1)+' '+ty.toFixed(1)+')">'+em+esc(label)+'</text>';
+  }
+  svg.innerHTML = parts;
+  document.getElementById('wheelrot').style.transform = 'rotate('+wheelState.angle+'deg)';
+  document.getElementById('wheel-overlay').classList.add('show');
+  setTimeout(function(){ spinWheel(entries, onPick); }, 350);
+}
+function spinWheel(entries, onPick){
+  if (wheelState.spinning) return;
+  wheelState.spinning = true;
+  var n = entries.length, wA = 360/n, pick = Math.floor(Math.random()*n);
+  var jitter = (Math.random()-0.5)*wA*0.5;
+  var current = wheelState.angle % 360;
+  var target = wheelState.angle - current + 360*5 + (360 - (pick*wA + wA/2)) + jitter;
+  wheelState.angle = target;
+  var rot = document.getElementById('wheelrot');
+  rot.style.transform = 'rotate('+target+'deg)';
+  var fallback = setTimeout(done, 4600);
+  rot.addEventListener('transitionend', done, { once:true });
+  function done(){
+    clearTimeout(fallback);
+    rot.removeEventListener('transitionend', done);   // detach so a stale closure can't replay next spin
+    if (!wheelState.spinning) return;
+    wheelState.spinning = false;
+    closeOverlay('wheel-overlay');
+    confetti(false);
+    onPick(entries[pick].value);
+  }
+}
+/* wheel callers */
+function spinSavedWheel(){
+  var entries = draw.options.map(function(id){
+    var p = place(id); return p ? { label:p.name, emoji:cuisineEmoji(p.cuisine), value:{ src:'saved', id:id } } : null;
+  }).filter(Boolean);
+  if (!entries.length){ toast('Nothing left to spin'); renderSpin(); return; }   // all options removed mid-session
+  document.getElementById('wheel-h3').textContent = 'Let the wheel decide';
+  openWheel(entries, onPlacePicked);
+}
+function spinFinalWheel(){
+  var entries = nearby.final.map(function(r){
+    return { label:r.name, emoji:cuisineEmoji(r.cuisine), value:{ src:'nearby', rec:r, savedId:null } };
+  });
+  document.getElementById('wheel-h3').textContent = 'Let the wheel decide';
+  openWheel(entries, onPlacePicked);
+}
+function onPlacePicked(ctx){
+  if (ctx.src === 'saved'){
+    var p = place(ctx.id);
+    if (!p || p.visitedAt){ toast('Plans changed mid-spin'); renderSpin(); return; }   // post-spin revalidate
+  } else {
+    var dupe = placesArr().filter(function(sp){ return sp.placeId && sp.placeId === ctx.rec.placeId; })[0];
+    if (dupe){ ctx = { src:'saved', id: dupe.id }; }   // the other phone saved it mid-spin
+  }
+  openResult(ctx);
+}
+
+/* ==================== result detail ==================== */
+function openResult(ctx){
+  var p = ctxRec(ctx); if (!p) return;
+  draw.pick = ctx;
+  document.getElementById('res-photo').innerHTML = photoHtml(p, 'res-photo').replace(/^<div class="res-photo">|<\/div>$/g,'');
+  document.getElementById('res-name').textContent = p.name;
+  var meta = [];
+  if (p.cuisine) meta.push(p.cuisine);
+  meta.push(priceLabel(p.priceLevel));
+  if (p.suburb) meta.push(p.suburb);
+  var dm = driveMins(p); if (dm != null) meta.push(dm+' min drive');
+  if (p.rating) meta.push('★ '+p.rating+(p.ratingCount?' ('+p.ratingCount+')':''));
+  document.getElementById('res-meta').textContent = meta.join('  ·  ');
+
+  /* reset to choose state */
+  document.getElementById('res-choose').style.display = '';
+  document.getElementById('res-actions').style.display = 'none';
+  document.getElementById('res-lock').textContent = (ctx.src === 'nearby') ? 'Save & lock it in' : 'Lock it in';
+  /* "Show 3 others" only makes sense from an active draw, not a rail tap */
+  document.getElementById('res-reshuffle').style.display = (ctx.src === 'saved' && draw.active && !draw.reshuffleUsed) ? '' : 'none';
+  document.getElementById('result-overlay').classList.add('show');
+  document.querySelector('#result-overlay .sheet').scrollTop = 0;   // always open showing the top, not scrolled to the buttons
+
+  renderTaste(ctx, p);
+  runOpenCheck(ctx, p);
+}
+
+/* "what people say" — mined dish notes; hidden entirely when there's nothing honest to show */
+function renderTaste(ctx, p){
+  var notes = (ctx.src === 'nearby') ? mineDishes(p) : (p.tasteNotes || null);
+  paintTaste(notes);
+  if (ctx.src === 'saved' && placesKeyReady() && p.placeId){
+    var tn = p.tasteNotes;
+    var stale = !tn || !tn.fetchedAt || (Date.now()-tn.fetchedAt) > 30*24*60*60*1000;
+    if (stale){
+      Places.tasteCheck(p.placeId).then(function(d){
+        if (!sameCtx(draw.pick, ctx)) return;
+        var mined = mineDishes({ editorial:d.editorial, reviews:d.reviews });
+        paintTaste(mined);
+        Store.patch({ ['places/'+ctx.id+'/tasteNotes']: { summary:mined.summary, dishes:mined.dishes, quotes:mined.quotes, fetchedAt: Date.now() } });
+      }).catch(function(){});
+    }
+  }
+}
+function paintTaste(notes){
+  var el = document.getElementById('res-taste');
+  /* Firebase drops empty arrays, so tasteNotes may come back with dishes/quotes missing — read defensively */
+  var dishes = (notes && notes.dishes) || [], quotes = (notes && notes.quotes) || [], summary = (notes && notes.summary) || '';
+  if (!dishes.length && !quotes.length && !summary){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  var html = '<div class="tastelabel">What people say</div>';
+  if (dishes.length) html += '<div class="dishrow">' + dishes.map(function(d){ return '<span class="dishchip">'+esc(d)+'</span>'; }).join('') + '</div>';
+  if (quotes.length) html += '<div class="tastequote">“'+esc(quotes[0])+'”</div>';   // one quote keeps the sheet short enough to show it
+  else if (summary) html += '<div class="tastesum">'+esc(summary)+'</div>';
+  el.innerHTML = html; el.style.display = '';
+}
+
+function stampOpen(el, cls, text){ el.className = 'openline'+(cls?' '+cls:''); el.textContent = text; }
+function storedOpenLabel(p){
+  if (openRightNow(p)) return { cls:'open', text:'Open now (based on saved hours)' };
+  if (!(p.hours && p.hours.periods)) return { cls:'', text:'Hours unknown — worth a quick call' };
+  return { cls:'shut', text:'Looks closed now (based on saved hours)' };
+}
+function runOpenCheck(ctx, p){
+  var el = document.getElementById('res-open');
+  if (ctx.src === 'nearby'){                           // hours came fresh in the search — no extra API call
+    var sN = storedOpenLabel(p); stampOpen(el, sN.cls, sN.text); return;
+  }
+  stampOpen(el, '', 'Checking if they\'re open…');
+  if (!placesKeyReady() || !p.placeId){
+    var s = storedOpenLabel(p); stampOpen(el, s.cls, s.text); return;
+  }
+  Places.openCheck(p.placeId).then(function(r){
+    if (!sameCtx(draw.pick, ctx)) return;             // user moved on
+    if (r.businessStatus === 'CLOSED_PERMANENTLY'){
+      stampOpen(el, 'shut', 'Permanently closed — pick another');
+      document.getElementById('res-reshuffle').style.display = '';   // allow a reroll even if used
+      draw.reshuffleUsed = false;
+      return;
+    }
+    var coh = r.currentOpeningHours;
+    if (coh && typeof coh.openNow === 'boolean'){
+      if (coh.openNow){
+        var closes = nextCloseText(coh);
+        stampOpen(el, 'open', 'Open now'+(closes?', closes '+closes:''));
+      } else {
+        stampOpen(el, 'shut', 'Closed right now');
+      }
+    } else { var s2 = storedOpenLabel(p); stampOpen(el, s2.cls, s2.text); }
+  }).catch(function(){
+    if (!sameCtx(draw.pick, ctx)) return;
+    var s3 = storedOpenLabel(p); stampOpen(el, s3.cls, s3.text);
+  });
+}
+function nextCloseText(coh){
+  try {
+    var day = (new Date()).getDay();
+    var per = (coh.periods||[]).filter(function(x){ return x.open && x.open.day === day && x.close; });
+    if (!per.length) return '';
+    var c = per[0].close;
+    var h = c.hour, mm = c.minute||0, ap = h<12?'am':'pm', h12 = ((h+11)%12)+1;
+    return h12 + (mm?(':'+String(mm).padStart(2,'0')):'') + ap;
+  } catch(e){ return ''; }
+}
+
+function lockIn(){
+  var ctx = draw.pick, p = ctxRec(ctx); if (!p) return;
+  if (ctx.src === 'nearby' && !ctx.savedId){          // save-winner-only
+    var dupe = placesArr().filter(function(sp){ return sp.placeId && sp.placeId === p.placeId; })[0];
+    if (dupe){ ctx.savedId = dupe.id; }
+    else { var id = uid(); Store.patch({ ['places/'+id]: buildDiscoveryRec(p) }); ctx.savedId = id; toast(p.name+' saved to your list'); }
+  }
+  var key = ctx.src === 'saved' ? ctx.id : ctx.savedId;
+  Store.patch({ 'lastPick': { placeKey:key, at:Date.now() } });
+  document.getElementById('res-choose').style.display = 'none';
+  document.getElementById('res-actions').style.display = '';
+  /* built from the in-memory rec `p`, never place(key) — avoids the async-save race */
+  var dir = document.getElementById('res-directions');
+  dir.href = p.lat != null
+    ? 'https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+(p.placeId?'&destination_place_id='+encodeURIComponent(p.placeId):'')
+    : (p.mapsUri || 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+(p.suburb||'')));
+  var call = document.getElementById('res-call');
+  if (p.phone){ call.style.display = ''; call.href = 'tel:'+String(p.phone).replace(/[^+\d]/g,''); }
+  else { call.style.display = 'none'; }
+  confetti(true);
+}
+
+/* mark the current pick as visited (from the result action row) */
+function markVisitedFlow(){
+  var ctx = draw.pick; if (!ctx) return;
+  var id, nm;
+  if (ctx.src === 'nearby'){
+    nm = ctx.rec.name;
+    id = ctx.savedId || uid();
+    if (!ctx.savedId){ Store.patch({ ['places/'+id]: buildDiscoveryRec(ctx.rec) }); ctx.savedId = id; }
+  } else {
+    id = ctx.id; var pp = place(id);
+    if (!pp){ toast('That place is no longer on the list'); return; }   // other phone removed it
+    nm = pp.name;
+  }
+  var worth = confirm('Worth going back? OK = yes, Cancel = no.');
+  Store.patch({ ['places/'+id+'/visitedAt']: Date.now(), ['places/'+id+'/worthRepeat']: worth });
+  toast(nm+' moved to Been');
+}
+
+/* ==================== add flow (Places) ==================== */
+var addFlow = { token:null, chosen:null, timer:null };
+function openAdd(){
+  addFlow = { token:uid()+uid(), chosen:null, timer:null };
+  document.getElementById('add-search').value = '';
+  document.getElementById('add-suggests').innerHTML = '';
+  document.getElementById('add-confirm').style.display = 'none';
+  document.getElementById('add-confirm').innerHTML = '';
+  document.getElementById('add-save').style.display = 'none';
+  document.getElementById('add-hint').textContent = placesKeyReady()
+    ? 'Type the restaurant name.' : 'Search is off until the Places key is set. Add by name for now.';
+  document.getElementById('add-overlay').classList.add('show');
+  setTimeout(function(){ document.getElementById('add-search').focus(); }, 200);
+}
+function onAddType(){
+  var q = document.getElementById('add-search').value.trim();
+  clearTimeout(addFlow.timer);
+  if (!placesKeyReady()) return;                       // manual only
+  if (q.length < 3){ document.getElementById('add-suggests').innerHTML = ''; return; }
+  addFlow.timer = setTimeout(function(){ runAutocomplete(q); }, 300);
+}
+function runAutocomplete(q){
+  Places.autocomplete(q, addFlow.token).then(function(list){
+    var host = document.getElementById('add-suggests');
+    if (!list.length){ host.innerHTML = '<div class="suggest"><div class="s-sub">No matches. Add by name below.</div></div>'; return; }
+    host.innerHTML = list.slice(0,6).map(function(s){
+      return '<div class="suggest" data-pid="'+esc(s.placeId)+'"><div class="s-name">'+esc(s.main)+'</div><div class="s-sub">'+esc(s.sub)+'</div></div>';
+    }).join('');
+  }).catch(function(){
+    document.getElementById('add-suggests').innerHTML = '<div class="suggest"><div class="s-sub">Search failed. Add by name below.</div></div>';
+  });
+}
+function chooseSuggestion(pid){
+  document.getElementById('add-suggests').innerHTML = '';
+  document.getElementById('add-confirm').style.display = '';
+  document.getElementById('add-confirm').innerHTML = '<p style="text-align:center"><span class="spinner"></span></p>';
+  Places.details(pid, addFlow.token).then(function(rec){
+    /* dedupe */
+    var dupe = placesArr().some(function(p){ return p.placeId && p.placeId === rec.placeId; });
+    if (dupe){ toast('Already on the list'); closeOverlay('add-overlay'); document.body.dataset.tab='list'; return; }
+    if (rec.photoName){
+      Places.photo(rec.photoName).then(function(uri){ rec.photoUri = uri; addFlow.chosen = rec; renderConfirm(rec); })
+        .catch(function(){ addFlow.chosen = rec; renderConfirm(rec); });
+    } else { addFlow.chosen = rec; renderConfirm(rec); }
+  }).catch(function(){
+    toast('Could not load details — add by name');
+    document.getElementById('add-confirm').style.display = 'none';
+  });
+}
+function renderConfirm(rec){
+  addFlow.chosen = rec;
+  var c = document.getElementById('add-confirm');
+  c.style.display = '';
+  c.innerHTML =
+    (rec.photoUri ? '<div class="res-photo"><img src="'+esc(rec.photoUri)+'" alt=""></div>' : '')
+    + '<div class="field"><label>Name</label><input class="txtinput" id="cf-name" value="'+esc(rec.name)+'"></div>'
+    + '<div class="field"><label>Cuisine (Google\'s guess, edit it)</label><input class="txtinput" id="cf-cuisine" value="'+esc(rec.cuisine||'')+'"></div>'
+    + '<div class="field"><label>Suburb</label><input class="txtinput" id="cf-suburb" value="'+esc(rec.suburb||'')+'"></div>'
+    + '<div class="kidcheck"><input type="checkbox" id="cf-kid" '+(rec.kidFriendly?'checked':'')+'>'
+    +   '<div><div class="kc-text">Kid-friendly</div><div class="kc-cap">Google\'s guess, confirm it</div></div></div>'
+    + '<div class="field"><label>Notes (optional)</label><textarea class="txtinput" id="cf-notes" placeholder="the pasta place from Broadsheet"></textarea></div>';
+  document.getElementById('add-save').style.display = '';
+}
+function saveAdd(manual){
+  var rec = addFlow.chosen;
+  var id = uid();
+  var base;
+  if (manual && !rec){
+    var nm = document.getElementById('add-search').value.trim();
+    if (!nm){ document.getElementById('add-search').focus(); return; }
+    base = { name:nm, cuisine:'', priceLevel:null, kidFriendly:false };
+  } else {
+    base = {
+      placeId: rec.placeId, name: (val('cf-name')||rec.name), cuisine: val('cf-cuisine'),
+      priceLevel: rec.priceLevel, suburb: val('cf-suburb'), address: rec.address,
+      lat: rec.lat, lng: rec.lng, mapsUri: rec.mapsUri, phone: rec.phone, website: rec.website,
+      rating: rec.rating, ratingCount: rec.ratingCount, photoUri: rec.photoUri, hours: rec.hours,
+      kidFriendly: document.getElementById('cf-kid').checked
+    };
+    var notes = val('cf-notes'); if (notes) base.notes = notes;
+  }
+  base.by = user || null;
+  base.addedAt = Date.now();
+  base.visitedAt = null;
+  base.worthRepeat = null;
+  base.skips = 0;
+  /* strip undefined (Firebase rejects them) */
+  Object.keys(base).forEach(function(k){ if (base[k] === undefined) delete base[k]; });
+  Store.patch({ ['places/'+id]: base });
+  closeOverlay('add-overlay');
+  toast(base.name+' added');
+}
+function val(id){ var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+/* ==================== list detail ==================== */
+var detailId = null;
+function openDetail(id){
+  var p = place(id); if (!p) return;
+  detailId = id;
+  var been = !!p.visitedAt;
+  var sheet = document.getElementById('detail-sheet');
+  sheet.innerHTML =
+    photoHtml(p, 'res-photo').replace('class="res-photo"','class="res-photo"')
+    + '<h3>'+esc(p.name)+'</h3>'
+    + '<div class="field" style="text-align:left"><label>Cuisine</label><input class="txtinput" id="d-cuisine" value="'+esc(p.cuisine||'')+'"></div>'
+    + '<div class="kidcheck"><input type="checkbox" id="d-kid" '+(p.kidFriendly?'checked':'')+'>'
+    +   '<div><div class="kc-text">Kid-friendly</div><div class="kc-cap">would we take Avery here?</div></div></div>'
+    + '<div class="field" style="text-align:left"><label>Notes</label><textarea class="txtinput" id="d-notes">'+esc(p.notes||'')+'</textarea></div>'
+    + '<div class="sheetbtns">'
+    +   '<button class="primary" id="d-save">Save changes</button>'
+    +   (been
+          ? '<button class="ghost" id="d-revive">Back in the pool</button>'
+          : '<button class="ghost" id="d-went">We went</button>')
+    +   (p.blocked
+          ? '<button class="ghost" id="d-unblock">Back in the rotation</button>'
+          : '<button class="danger" id="d-block">Not for us</button>')
+    +   '<button class="ghost" id="d-refresh">Refresh details from Google</button>'
+    +   '<a class="ghost" id="d-directions" target="_blank" rel="noopener" style="text-decoration:none">Directions</a>'
+    +   '<button class="danger" id="d-remove">Remove</button>'
+    +   '<button class="quiet" id="d-close">Close</button>'
+    + '</div>';
+  var dir = document.getElementById('d-directions');
+  dir.href = p.lat != null
+    ? 'https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng
+    : (p.mapsUri || 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+(p.suburb||'')));
+  document.getElementById('detail-overlay').classList.add('show');
+}
+function saveDetail(){
+  var id = detailId; if (!id) return;
+  Store.patch({
+    ['places/'+id+'/cuisine']: val('d-cuisine'),
+    ['places/'+id+'/kidFriendly']: document.getElementById('d-kid').checked,
+    ['places/'+id+'/notes']: val('d-notes') || null
+  });
+  closeOverlay('detail-overlay');
+  toast('Saved');
+}
+function refreshDetail(){
+  var id = detailId, p = place(id); if (!p) return;
+  if (!placesKeyReady() || !p.placeId){ toast('Places key not set — can\'t refresh'); return; }
+  toast('Refreshing…');
+  Places.details(p.placeId, uid()).then(function(rec){
+    var patch = {};
+    /* Places-owned block only; never touch cuisine/kidFriendly/notes/by */
+    ['name','priceLevel','suburb','address','lat','lng','mapsUri','phone','website','rating','ratingCount','hours'].forEach(function(k){
+      if (rec[k] !== undefined) patch['places/'+id+'/'+k] = rec[k];
+    });
+    if (rec.photoName){
+      Places.photo(rec.photoName).then(function(uri){ patch['places/'+id+'/photoUri'] = uri; Store.patch(patch); toast('Updated from Google'); })
+        .catch(function(){ Store.patch(patch); toast('Updated from Google'); });
+    } else { Store.patch(patch); toast('Updated from Google'); }
+  }).catch(function(){ toast('Refresh failed'); });
+}
+
+/* ==================== Places key readiness ==================== */
+function placesKeyReady(){
+  return !!(window.PLACES_API_KEY && window.PLACES_API_KEY !== 'REPLACE_ME_PLACES_KEY');
+}
+
+/* ==================== overlays helpers ==================== */
+function closeOverlay(id){ document.getElementById(id).classList.remove('show'); }
+
+/* ==================== events ==================== */
+document.querySelector('nav').addEventListener('click', function(ev){
+  var b = ev.target.closest('button[data-tab]'); if (b) document.body.dataset.tab = b.dataset.tab;
+});
+document.getElementById('fab').addEventListener('click', openAdd);
+
+/* filter chips open their sheet */
+document.getElementById('view-spin').addEventListener('click', function(ev){
+  var fc = ev.target.closest('[data-fs]'); if (fc){ openFilterSheet(fc.dataset.fs); return; }
+  if (ev.target.closest('#findbtn')){ findOptions(); return; }
+  if (ev.target.closest('#surprisebtn')){ nearby.wide = false; nearby.cuisineOverride = null; findNearby(); return; }
+  if (ev.target.closest('#cuisinespin')){ spinCuisine(); return; }
+  if (ev.target.closest('#spindecide')){ spinSavedWheel(); return; }
+  if (ev.target.closest('#findagain')){ draw.active = false; renderSpin(); return; }
+  /* discovery: broad stage */
+  var bpick = ev.target.closest('[data-bpick]'); if (bpick){ toggleBroadPick(bpick.dataset.bpick); return; }
+  if (ev.target.closest('#npickspin')){ goFinal(selectedRecs()); spinFinalWheel(); return; }
+  if (ev.target.closest('#nauto')){ autoPickThree(); return; }
+  if (ev.target.closest('#nmore15')){ moreFifteen(); return; }
+  if (ev.target.closest('#nclearcuisine')){ nearby.cuisineOverride = null; findNearby(); return; }
+  /* discovery: final stage */
+  var fopen = ev.target.closest('[data-fopen]'); if (fopen){ var fr = nearbyRec(fopen.dataset.fopen); if (fr) openResult({ src:'nearby', rec:fr, savedId:null }); return; }
+  if (ev.target.closest('#nspin')){ spinFinalWheel(); return; }
+  if (ev.target.closest('#nbackbroad')){ nearby.stage = 'broad'; renderSpin(); return; }
+  if (ev.target.closest('#nearbyretry')){ findNearby(); return; }
+  if (ev.target.closest('#nearbyback')){ nearbyReset(); renderSpin(); return; }
+  if (ev.target.closest('#nearbywiden')){ nearby.wide = true; findNearby(); return; }
+  if (ev.target.closest('[data-railmore]')){
+    var railEl = document.querySelector('.rail');
+    var sx = railEl ? railEl.scrollLeft : 0;
+    railClicks++; renderSpin();
+    railEl = document.querySelector('.rail'); if (railEl) railEl.scrollLeft = sx;
+    return;
+  }
+  var rc = ev.target.closest('[data-rail]'); if (rc){ openResult({ src:'saved', id: rc.dataset.rail }); return; }
+  var oc = ev.target.closest('.optcard'); if (oc && oc.dataset.opt){ openResult({ src:'saved', id: oc.dataset.opt }); return; }
+  var relax = ev.target.closest('[data-relax]');
+  if (relax){
+    var k = relax.dataset.relax;
+    if (k === 'meal') mealOn = false;
+    else if (k === 'open') openNow = false;
+    else if (k === 'rating') ratingMin = 0;
+    else if (k === 'kid') kidOn = false;
+    else if (k === 'dist'){ dist = 'any'; localStorage.setItem('lt-dist', dist); }
+    else if (k === 'cuisine') cuisines = {};
+    else if (k === 'price') prices = {};
+    findOptions(); return;
+  }
+  if (ev.target.closest('#relax-clear')){
+    mealOn = false; openNow = false; ratingMin = 0; kidOn = false; dist = 'any'; localStorage.setItem('lt-dist','any'); cuisines = {}; prices = {};
+    findOptions(); return;
+  }
+  if (ev.target.closest('#relax-add')){ openAdd(); return; }
+});
+
+/* filter sheet: draft mutations, Reset, Apply; scrim tap discards the draft */
+document.getElementById('filter-overlay').addEventListener('click', function(ev){
+  if (ev.target.id === 'filter-overlay'){ closeFilterSheet(); return; }
+  var d = fs.draft; if (!d) return;
+  var pill = ev.target.closest('[data-fspill]');
+  if (pill){
+    var k = pill.dataset.fspill, v = pill.dataset.fsval;
+    if (k === 'dist') d.dist = v;
+    else if (k === 'price'){ var pl = +v; if (d.prices[pl]) delete d.prices[pl]; else d.prices[pl] = true; }
+    else if (k === 'rating') d.ratingMin = +v;
+    else if (k === 'meal'){ if (v === 'off') d.mealOn = false; else { d.mealOn = true; d.meal = v; } }
+    renderFilterSheet(); return;
+  }
+  var row = ev.target.closest('[data-fsv]');
+  if (row){ var c = row.dataset.fsv; if (d.cuisines[c]) delete d.cuisines[c]; else d.cuisines[c] = true; renderFilterSheet(); return; }
+  var tog = ev.target.closest('[data-fstoggle]');
+  if (tog){
+    if (tog.dataset.fstoggle === 'open') d.openNow = !d.openNow;
+    else if (tog.dataset.fstoggle === 'kid') d.kidOn = !d.kidOn;
+    renderFilterSheet(); return;
+  }
+  if (ev.target.closest('#fs-reset')){ fsResetDraft(); renderFilterSheet(); return; }
+  if (ev.target.closest('#fs-apply')){
+    fsCommitDraft(); return;
+  }
+});
+function fsCommitDraft(){
+  fsApplyGlobals(fs.draft);
+  localStorage.setItem('lt-dist', dist);
+  closeFilterSheet();
+  draw.active = false; nearby.active = false;
+  renderSpin();
+  if (dist !== 'any' && !home()) openHome();   // ring needs a home point; until set, distance can't bite
+}
+
+/* result overlay */
+document.getElementById('res-lock').addEventListener('click', lockIn);
+document.getElementById('res-reshuffle').addEventListener('click', function(){ if (draw.pick && draw.pick.src === 'saved') reshuffle(); });
+document.getElementById('res-back').addEventListener('click', function(){ closeOverlay('result-overlay'); if (draw.pick && draw.pick.src === 'nearby'){ renderSpin(); } else { draw.active = false; renderSpin(); } });
+document.getElementById('res-done').addEventListener('click', function(){ closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
+document.getElementById('res-visited').addEventListener('click', function(){ markVisitedFlow(); closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
+
+/* list segment + cards */
+document.getElementById('listseg').addEventListener('click', function(ev){
+  var b = ev.target.closest('button[data-seg]'); if (!b) return;
+  document.querySelectorAll('#listseg button').forEach(function(x){ x.classList.toggle('on', x === b); });
+  renderList();
+});
+document.getElementById('listcards').addEventListener('click', function(ev){
+  var c = ev.target.closest('.listcard'); if (c) openDetail(c.dataset.id);
+});
+
+/* detail overlay (delegated, sheet is rebuilt each open) */
+document.getElementById('detail-overlay').addEventListener('click', function(ev){
+  if (ev.target.id === 'detail-overlay'){ closeOverlay('detail-overlay'); return; }
+  var t = ev.target.closest('button, a'); if (!t) return;
+  if (t.id === 'd-save') saveDetail();
+  else if (t.id === 'd-close') closeOverlay('detail-overlay');
+  else if (t.id === 'd-refresh') refreshDetail();
+  else if (t.id === 'd-went'){
+    var worth = confirm('Worth going back? OK = yes, Cancel = no.');
+    Store.patch({ ['places/'+detailId+'/visitedAt']: Date.now(), ['places/'+detailId+'/worthRepeat']: worth });
+    closeOverlay('detail-overlay'); toast('Moved to Been');
+  }
+  else if (t.id === 'd-revive'){
+    Store.patch({ ['places/'+detailId+'/visitedAt']: null, ['places/'+detailId+'/worthRepeat']: null });
+    closeOverlay('detail-overlay'); toast('Back in the pool');
+  }
+  else if (t.id === 'd-block'){
+    Store.patch({ ['places/'+detailId+'/blocked']: true });
+    closeOverlay('detail-overlay'); toast('Ruled out — won’t be suggested again');
+  }
+  else if (t.id === 'd-unblock'){
+    Store.patch({ ['places/'+detailId+'/blocked']: null });
+    closeOverlay('detail-overlay'); toast('Back in the rotation');
+  }
+  else if (t.id === 'd-remove'){
+    if (!confirm('Remove this place for good?')) return;
+    var patch = {}; patch['places/'+detailId] = null;
+    var lp = state && state.lastPick; if (lp && lp.placeKey === detailId) patch['lastPick'] = null;
+    Store.patch(patch);
+    closeOverlay('detail-overlay'); toast('Removed');
+  }
+});
+
+/* add overlay */
+document.getElementById('add-search').addEventListener('input', onAddType);
+document.getElementById('add-suggests').addEventListener('click', function(ev){
+  var s = ev.target.closest('[data-pid]'); if (s) chooseSuggestion(s.dataset.pid);
+});
+document.getElementById('add-save').addEventListener('click', function(){ saveAdd(false); });
+document.getElementById('add-manual').addEventListener('click', function(){
+  if (addFlow.chosen) saveAdd(false); else saveAdd(true);
+});
+document.getElementById('add-cancel').addEventListener('click', function(){ closeOverlay('add-overlay'); });
+
+/* who overlay */
+document.getElementById('who-overlay').addEventListener('click', function(ev){
+  var b = ev.target.closest('button[data-who]'); if (!b) return;
+  user = b.dataset.who; localStorage.setItem('lt-user', user);
+  closeOverlay('who-overlay');
+  if (!home()) openHome();
+  render();
+});
+
+/* key overlay */
+/* escape hatch: long-press (or double-click) the title to re-pair with a new table code.
+   The manifest start_url deliberately carries no code (a code in the manifest is public). */
+(function(){
+  var t = null, h1 = document.querySelector('.brand h1');
+  function openKey(){ document.getElementById('keyinput').value = ''; document.getElementById('key-overlay').classList.add('show'); }
+  h1.addEventListener('touchstart', function(){ t = setTimeout(openKey, 700); });
+  h1.addEventListener('touchend', function(){ clearTimeout(t); });
+  h1.addEventListener('touchmove', function(){ clearTimeout(t); });
+  h1.addEventListener('dblclick', openKey);
+})();
+document.getElementById('keyinput').addEventListener('keydown', function(ev){ if (ev.key === 'Enter') document.getElementById('keysave').click(); });
+document.getElementById('keysave').addEventListener('click', function(){
+  var v = document.getElementById('keyinput').value.trim();
+  var m = v.match(/k=([A-Za-z0-9_-]{8,})/) || v.match(/^([A-Za-z0-9_-]{8,})$/);
+  if (!m){ toast('That code doesn\'t look right'); return; }
+  localStorage.setItem('lt-key', m[1]);
+  location.hash = 'k='+m[1];
+  location.reload();
+});
+
+/* home overlay */
+var homeFlow = { token:'', timer:null };
+function openHome(){
+  homeFlow = { token: uid()+uid(), timer:null };
+  document.getElementById('home-search').value = '';
+  document.getElementById('home-suggests').innerHTML = '';
+  document.getElementById('home-overlay').classList.add('show');
+}
+function onHomeType(){
+  var q = document.getElementById('home-search').value.trim();
+  clearTimeout(homeFlow.timer);
+  if (!placesKeyReady()) return;
+  if (q.length < 3){ document.getElementById('home-suggests').innerHTML = ''; return; }
+  homeFlow.timer = setTimeout(function(){ runHomeAutocomplete(q); }, 300);
+}
+function runHomeAutocomplete(q){
+  Places.homeAutocomplete(q, homeFlow.token).then(function(list){
+    var host = document.getElementById('home-suggests');
+    host.innerHTML = list.slice(0,6).map(function(s){
+      return '<div class="suggest" data-hpid="'+esc(s.placeId)+'"><div class="s-name">'+esc(s.main)+'</div><div class="s-sub">'+esc(s.sub)+'</div></div>';
+    }).join('');
+  }).catch(function(){ document.getElementById('home-suggests').innerHTML = ''; });
+}
+function chooseHome(pid){
+  document.getElementById('home-suggests').innerHTML = '<div class="suggest"><span class="spinner"></span></div>';
+  Places.details(pid, homeFlow.token).then(function(rec){
+    if (rec.lat == null){ toast('Couldn\'t place that one — try another'); document.getElementById('home-suggests').innerHTML = ''; return; }
+    Store.patch({ 'settings/home': { lat: +rec.lat.toFixed(5), lng: +rec.lng.toFixed(5) } });
+    closeOverlay('home-overlay'); toast('Home set');
+  }).catch(function(){ toast('Couldn\'t place that one — try another'); document.getElementById('home-suggests').innerHTML = ''; });
+}
+document.getElementById('home-search').addEventListener('input', onHomeType);
+document.getElementById('home-suggests').addEventListener('click', function(ev){
+  var s = ev.target.closest('[data-hpid]'); if (s) chooseHome(s.dataset.hpid);
+});
+document.getElementById('home-use').addEventListener('click', function(){
+  if (!navigator.geolocation){ toast('No location on this device'); return; }
+  toast('Getting location…');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    Store.patch({ 'settings/home': { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5) } });
+    closeOverlay('home-overlay'); toast('Home set');
+  }, function(){ toast('Location blocked — set it later in the ring'); closeOverlay('home-overlay'); });
+});
+document.getElementById('home-skip').addEventListener('click', function(){ closeOverlay('home-overlay'); });
+
+document.addEventListener('visibilitychange', function(){ if (!document.hidden){ meal = clockMeal(); render(); } });
+
+/* ==================== boot ==================== */
+function boot(){
+  if ('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
+  var ready;
+  if (window.FIREBASE_CONFIG){
+    var key = tableKey();
+    if (!key){ document.getElementById('key-overlay').classList.add('show'); return; }  // wait for code (reloads after save)
+    ready = new Promise(function(resolve){
+      var settled = false;
+      var settle = function(){ if (!settled){ settled = true; resolve(); } };
+      initCloud(key).then(settle).catch(function(){
+        toast('Sync unavailable, using this phone only'); initLocal().then(settle);
+      });
+      setTimeout(function(){                         // 4s offline fallback: never hang on a blank screen
+        if (settled) return;
+        if (!state){ try { state = JSON.parse(localStorage.getItem('lt-state')||'null'); } catch(e){} if (!state) state = seedState(); }
+        var b = document.getElementById('modebanner');
+        b.textContent = 'Offline — showing the last saved list. It reconnects by itself.';
+        b.classList.add('show');
+        settle();
+      }, 4000);
+    });
+  } else {
+    ready = initLocal();
+  }
+  ready.then(function(){
+    render();
+    if (!user) document.getElementById('who-overlay').classList.add('show');
+    else if (!home()) openHome();
+  });
+}
+boot();
+})();
+</script>
+</body>
+</html>
