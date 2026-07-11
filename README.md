@@ -21,10 +21,14 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   end of the row whenever any filter is active. A
   **Most popular nearby** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
   crowd-pleasers near your home point that you haven't saved yet, not places
-  already on your list. It shows 6 to start; each **Show more** tap loads and
-  reveals 5 more new spots as one clean block (fetching fresh Google batches
-  until 5 are ready), for up to 3 taps, then the button retires. It shows even
-  when the saved list is empty. It sits above
+  already on your list. It **rotates daily**: the day's pool of ~21 is fetched
+  once and cached (in localStorage, by date + home point), then ordered by a
+  date-seeded shuffle, so it's the same 6 all day and on both phones but a
+  different set tomorrow. Same-day reopens make zero Google calls (pool + photo
+  URLs come from cache), which is cheaper than the old fetch-on-every-open. It
+  shows 6 to start; each **Show more** tap reveals 5 more from the day's pool for
+  up to 3 taps, then the button retires. It shows even when the saved list is
+  empty. It sits above
   **Let's OG** (Google discovery of new nearby spots) and **Jenny's Hit List**
   (draw 3 from the saved list, pool count on the button). Tap a card or
   **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
