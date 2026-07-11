@@ -19,13 +19,19 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   carry over a reload), so Jenny's Hit List draws from the whole saved list —
   seeded and manually added places alike; a **Clear all** chip appears at the
   end of the row whenever any filter is active. A
-  **Most popular** rail (4.5★+, 300+ reviews) sits above **Let's OG** (Google
-  discovery of new nearby spots) and **Jenny's Hit List** (draw 3 from the saved
-  list, pool count on the button). Tap a card or **Spin the wheel** for the
-  3-wedge tie-breaker. Lock it in for Directions / Call, or **Show 3 others** once.
+  **Most popular nearby** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
+  crowd-pleasers near your home point that you haven't saved yet (one cached
+  Google call per session), not places already on your list. It sits above
+  **Let's OG** (Google discovery of new nearby spots) and **Jenny's Hit List**
+  (draw 3 from the saved list, pool count on the button). Tap a card or
+  **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
+  Call, or **Show 3 others** once. Mega fast-food franchises (McDonald's, KFC,
+  Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`)
+  are kept out of every suggestion, saved list and discovery alike.
 - **Places tab** holds the shortlist (Want to try / Been). Tap **+** to add a place
   by name (Google fills the details). **We went** moves it to Been and out of the
-  pool.
+  pool. **Swipe a row right to remove it** (a 5-second Undo snackbar appears);
+  the row's detail sheet still has a Remove button too.
 
 ---
 
