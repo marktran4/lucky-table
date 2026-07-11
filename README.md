@@ -15,7 +15,10 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 ## How it works
 
 - **Dine out tab** is home. Filter chips (Distance / Cuisine / Price / Rating /
-  More) open bottom sheets; the meal window auto-sets from the clock. A
+  More) open bottom sheets. **No filters are selected by default** (and none
+  carry over a reload), so Jenny's Hit List draws from the whole saved list —
+  seeded and manually added places alike; a **Clear all** chip appears at the
+  end of the row whenever any filter is active. A
   **Most popular** rail (4.5★+, 300+ reviews) sits above **Let's OG** (Google
   discovery of new nearby spots) and **Jenny's Hit List** (draw 3 from the saved
   list, pool count on the button). Tap a card or **Spin the wheel** for the
