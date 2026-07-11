@@ -996,20 +996,55 @@ function jennysChoiceBtnHtml(){
   return '<button class="'+cls+'" id="findbtn">Jenny’s Hit List'
     + '<span class="btnsub">'+n+' place'+(n===1?'':'s')+' in the running</span></button>';
 }
-/* idle-home rail: crowd-pleasers NEARBY you haven't saved yet — a discovery suggestion,
-   not the saved list. Google popularity search (4.5★+, 300+ reviews), most-reviewed first,
-   franchises + ruled-out cuisines + already-saved places stripped out. First batch loads once
-   when the idle screen appears; each "Show more" tap pulls a fresh, VARIED Google batch (rotated
-   rank + jittered centre, same trick as Let's OG) and appends new spots, so it keeps suggesting
-   new restaurants rather than recycling one fixed set of 20. */
-/* Show RAIL_FIRST cards, then up to RAIL_MAX_CLICKS taps of "Show more", each revealing exactly
-   RAIL_STEP NEW cards. Because a Google batch is at most 20 (and after the 4.5★/300+ gate often
-   far fewer), a tap first FETCHES varied batches until RAIL_STEP more crowd-pleasers are loaded,
-   THEN reveals them as one clean block — no "1 now, 4 later" dribble. */
+/* idle-home rail: crowd-pleasers NEARBY you haven't saved yet — a discovery suggestion, not the
+   saved list. Google popularity search (4.5★+, 300+ reviews), franchises + ruled-out cuisines +
+   already-saved places stripped out.
+
+   Rotates DAILY: the whole day's pool (POOL_TARGET crowd-pleasers) is fetched once and cached in
+   localStorage by date + home point, then ordered by a date-seeded shuffle. So it's stable all day
+   (same 6 whether you reopen once or ten times, and the same on both phones), and rotates to a
+   different set tomorrow. Same-day reopens make ZERO Google calls (pool + photo URLs come from
+   cache) — cheaper than the old fetch-on-every-open.
+
+   Show RAIL_FIRST cards, then up to RAIL_MAX_CLICKS taps of "Show more", each revealing RAIL_STEP
+   more from the day's pool. POOL_TARGET is sized to cover all reveals so Show more never needs a
+   live call. */
 var RAIL_FIRST = 6, RAIL_STEP = 5, RAIL_MAX_CLICKS = 3;
+var POOL_TARGET = RAIL_FIRST + RAIL_MAX_CLICKS * RAIL_STEP;   // 21: the full day's pool
 var railClicks = 0;
-var popRail = { loading:false, error:false, filling:false, batch:-1, dry:0, recs:[] };
+var popRail = { loading:false, error:false, filling:false, batch:-1, dry:0, recs:[], day:null, homeKey:null };
+var POP_CACHE_KEY = 'lt-poprail';
 function popRailRadiusM(){ return (midKm() || DEFAULT_MID) * 1000; }
+function railDay(){ return Math.floor(Date.now() / 86400000); }   // days since epoch: same calendar day = same value
+function homeKey(){ var h = home(); return h ? (h.lat.toFixed(4)+','+h.lng.toFixed(4)) : ''; }
+function railHash(s){ var h = 0; for (var i=0;i<s.length;i++){ h = (Math.imul(h,31) + s.charCodeAt(i))|0; } return h>>>0; }
+/* mix the day INTO each place's hash (avalanche) so a new day genuinely reshuffles the ranks —
+   a day suffix on a rolling hash would just add a constant and leave the order unchanged. */
+function railKey(placeId, day){
+  var h = railHash(placeId) ^ (Math.imul(day, 2654435761) >>> 0);
+  h = Math.imul(h ^ (h >>> 15), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+/* deterministic per-day order: same day+place gives the same rank on both phones, reshuffles tomorrow */
+function railOrder(list){
+  var day = railDay();
+  return list.slice().sort(function(a,b){ return railKey(a.placeId, day) - railKey(b.placeId, day); });
+}
+/* rail search centre: home for the POPULARITY seed; DISTANCE batches rotate their direction by the
+   day so the pool samples different neighbourhoods day to day (not just a reshuffle of one fixed set) */
+function railCenter(batch){ return jitterCenter(popRailRadiusM(), batch ? batch + (railDay() % 8) : 0); }
+function railVisibleCount(){ return RAIL_FIRST + railClicks * RAIL_STEP; }
+function popCacheRead(){
+  try {
+    var c = JSON.parse(localStorage.getItem(POP_CACHE_KEY) || 'null');
+    if (c && c.day === railDay() && c.homeKey === homeKey() && c.recs && c.recs.length) return c.recs;
+  } catch(e){}
+  return null;
+}
+function popCacheWrite(){
+  try { localStorage.setItem(POP_CACHE_KEY, JSON.stringify({ day: popRail.day, homeKey: popRail.homeKey, recs: popRail.recs })); } catch(e){}
+}
 function popRailRec(placeId){
   for (var i=0;i<popRail.recs.length;i++){ if (popRail.recs[i].placeId === placeId) return popRail.recs[i]; }
   return null;
@@ -1031,9 +1066,8 @@ function popRailMerge(recs){
   recs.forEach(function(r){
     if (!r.placeId || have[r.placeId] || saved[r.placeId] || isExcludedPlace(r)) return;
     if (r.rating == null || r.rating < 4.5 || (r.ratingCount||0) < 300) return;   // crowd-pleaser gate
-    have[r.placeId] = true; popRail.recs.push(r);
+    have[r.placeId] = true; popRail.recs.push(r);        // append only; the daily order is applied once the pool is built
   });
-  popRail.recs.sort(function(a,b){ return (b.ratingCount||0) - (a.ratingCount||0); });
 }
 function fetchPopularBatch(batch){                     // resolves to how many NEW eligible it added
   if (!placesKeyReady() || !home()) return Promise.resolve(0);
@@ -1045,7 +1079,7 @@ function fetchPopularBatch(batch){                     // resolves to how many N
     maxResultCount: 20,
     rankPreference: nearbyRank(batch),
     languageCode:'en-AU', regionCode:'au',
-    locationRestriction: { circle:{ center: jitterCenter(popRailRadiusM(), batch), radius: popRailRadiusM() } }
+    locationRestriction: { circle:{ center: railCenter(batch), radius: popRailRadiusM() } }
   }).then(function(recs){
     popRail.loading = false;
     popRailMerge(recs);
@@ -1068,32 +1102,43 @@ function ensureRail(target, done){
     });
   })();
 }
-function loadPopularRail(){                            // idle-render hook: get the first RAIL_FIRST cards
+function loadPopularRail(){                            // idle-render hook: today's pool, from cache or one daily build
   if (!placesKeyReady() || !home()) return;
-  if (popRail.recs.length) loadPopPhotos();
-  ensureRail(RAIL_FIRST);
+  var today = railDay(), hk = homeKey();
+  if (popRail.day === today && popRail.homeKey === hk && popRail.recs.length){ loadPopPhotos(); return; }  // in memory already
+  var cached = popCacheRead();
+  if (cached){                                        // today's pool built earlier (this or the other phone) — no API calls
+    popRail.recs = cached; popRail.day = today; popRail.homeKey = hk; popRail.batch = 99; popRail.dry = 99;
+    loadPopPhotos(); rerenderIdleRail(); return;
+  }
+  popRail.day = today; popRail.homeKey = hk; popRail.recs = []; popRail.batch = -1; popRail.dry = 0;
+  ensureRail(POOL_TARGET, function(){
+    popCacheWrite();                                  // order is applied at render time (railOrder), stable per day
+    loadPopPhotos(); rerenderIdleRail();
+  });
 }
-function morePopular(){                                // "Show more" tap: load RAIL_STEP more, then reveal them
+function morePopular(){                                // "Show more" tap: reveal RAIL_STEP more from the day's pool
   if (railClicks >= RAIL_MAX_CLICKS || popRail.filling) return;
   var want = RAIL_FIRST + (railClicks + 1) * RAIL_STEP;
   ensureRail(want, function(){ railClicks++; rerenderIdleRail(); });
 }
-function loadPopPhotos(){
+function loadPopPhotos(){                              // only pay for photos actually on screen; cache the URLs
   if (!placesKeyReady()) return;
-  popRail.recs.forEach(function(r){
+  railOrder(railEligible()).slice(0, railVisibleCount()).forEach(function(r){
     if (r.photoUri || !r.photoName) return;
     Places.photo(r.photoName).then(function(uri){
       r.photoUri = uri;
+      popCacheWrite();                                // persist the URL so a same-day reopen shows it free
       if (idleRailVisible()) rerenderIdleRail();
     }).catch(function(){});
   });
 }
 function popularRail(){
   if (!placesKeyReady() || !home()) return '';        // discovery-only: nothing to suggest without Google + a home point
-  var pops = railEligible();                           // a place saved from the rail drops off it
+  var pops = railOrder(railEligible());                // date-seeded daily order; saved places drop off
   if (!pops.length) return (popRail.loading || popRail.filling) ? '<h2>Most popular nearby <small>finding spots…</small></h2>' : '';
-  var shown = pops.slice(0, RAIL_FIRST + railClicks * RAIL_STEP);
-  var html = '<h2>Most popular nearby <small>4.5&#9733;+ · 300+ reviews · new to you</small></h2><div class="rail">';
+  var shown = pops.slice(0, railVisibleCount());
+  var html = '<h2>Most popular nearby <small>4.5&#9733;+ · 300+ reviews · fresh daily</small></h2><div class="rail">';
   shown.forEach(function(r){
     html += '<div class="railcard" data-poprail="'+esc(r.placeId)+'">' + photoHtml(r, 'railphoto')
       + '<div class="railname">'+esc(r.name)+'</div>'
