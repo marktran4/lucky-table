@@ -705,7 +705,8 @@ var prices = {};                                             // session only (se
 var draw = { active:false, options:[], firstSet:[], reshuffleUsed:false, pick:null };
 /* discovery session — the suggest funnel. stage 'broad' (up to 15 rows) -> 'final' (3 cards -> wheel) */
 var nearby = { active:false, loading:false, error:false, stage:'broad', wide:false,
-  raw:[], pool:[], broad:[], selected:{}, final:[], shown:{}, fetchedAt:0, cuisineOverride:null };
+  raw:[], pool:[], broad:[], selected:{}, final:[], shown:{}, seen:{}, batch:0, sig:null,
+  fetchedAt:0, cuisineOverride:null };
 
 /* ==================== app state (synced) ==================== */
 var state = null;
@@ -997,13 +998,13 @@ function jennysChoiceBtnHtml(){
 }
 /* idle-home rail: crowd-pleasers NEARBY you haven't saved yet — a discovery suggestion,
    not the saved list. Google popularity search (4.5★+, 300+ reviews), most-reviewed first,
-   with saved places + franchises + ruled-out cuisines stripped out. Fetched at most once per
-   session (cached), so the idle screen still makes near-zero API calls.
-   Shows RAIL_FIRST cards; each "Show more" tap reveals RAIL_STEP more, max RAIL_CLICKS taps. */
-var RAIL_FIRST = 6, RAIL_STEP = 5, RAIL_CLICKS = 3;
+   franchises + ruled-out cuisines + already-saved places stripped out. First batch loads once
+   when the idle screen appears; each "Show more" tap pulls a fresh, VARIED Google batch (rotated
+   rank + jittered centre, same trick as Let's OG) and appends new spots, so it keeps suggesting
+   new restaurants rather than recycling one fixed set of 20. */
+var RAIL_FIRST = 6, RAIL_STEP = 5;
 var railClicks = 0;
-var POP_TTL = 6*60*60*1000;                          // refetch the rail at most every 6h within a session
-var popRail = { loading:false, error:false, fetchedAt:0, recs:[] };
+var popRail = { loading:false, error:false, batch:0, recs:[] };
 function popRailRadiusM(){ return (midKm() || DEFAULT_MID) * 1000; }
 function popRailRec(placeId){
   for (var i=0;i<popRail.recs.length;i++){ if (popRail.recs[i].placeId === placeId) return popRail.recs[i]; }
@@ -1015,26 +1016,43 @@ function rerenderIdleRail(){
   railEl = document.querySelector('.rail'); if (railEl) railEl.scrollLeft = sx;
 }
 function idleRailVisible(){ return document.body.dataset.tab === 'spin' && !nearby.active && !draw.active; }
-function loadPopularRail(){
-  if (!placesKeyReady() || !home()) return;
-  if (popRail.loading) return;
-  if (popRail.recs.length && (Date.now() - popRail.fetchedAt) < POP_TTL){ loadPopPhotos(); return; }
-  popRail.loading = true; popRail.error = false;
-  var h = home();
+function popRailMerge(recs){
+  var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
+  var have = {}; popRail.recs.forEach(function(r){ have[r.placeId] = true; });
+  recs.forEach(function(r){
+    if (!r.placeId || have[r.placeId] || saved[r.placeId] || isExcludedPlace(r)) return;
+    if (r.rating == null || r.rating < 4.5 || (r.ratingCount||0) < 300) return;   // crowd-pleaser gate
+    have[r.placeId] = true; popRail.recs.push(r);
+  });
+  popRail.recs.sort(function(a,b){ return (b.ratingCount||0) - (a.ratingCount||0); });
+}
+function fetchPopularBatch(batch){
+  if (!placesKeyReady() || !home() || popRail.loading) return;
+  popRail.loading = true; popRail.error = false; popRail.batch = batch;
   Places.nearby({
     includedPrimaryTypes: ['restaurant'],
     excludedPrimaryTypes: ['fast_food_restaurant'],
-    maxResultCount: 20, rankPreference:'POPULARITY', languageCode:'en-AU', regionCode:'au',
-    locationRestriction: { circle:{ center:{ latitude:h.lat, longitude:h.lng }, radius: popRailRadiusM() } }
+    maxResultCount: 20,
+    rankPreference: nearbyRank(batch),
+    languageCode:'en-AU', regionCode:'au',
+    locationRestriction: { circle:{ center: jitterCenter(popRailRadiusM(), batch), radius: popRailRadiusM() } }
   }).then(function(recs){
-    popRail.loading = false; popRail.fetchedAt = Date.now();
-    var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
-    popRail.recs = recs.filter(function(r){
-      return r.placeId && !saved[r.placeId] && !isExcludedPlace(r)
-        && r.rating != null && r.rating >= 4.5 && (r.ratingCount||0) >= 300;
-    }).sort(function(a,b){ return (b.ratingCount||0) - (a.ratingCount||0); });
+    popRail.loading = false;
+    popRailMerge(recs);
     if (idleRailVisible()){ rerenderIdleRail(); loadPopPhotos(); }
-  }).catch(function(){ popRail.loading = false; popRail.error = true; });
+  }).catch(function(){ popRail.loading = false; popRail.error = true; if (idleRailVisible()) rerenderIdleRail(); });
+}
+function loadPopularRail(){                            // idle-render hook: first batch only, once
+  if (!placesKeyReady() || !home() || popRail.loading) return;
+  if (popRail.recs.length){ loadPopPhotos(); return; }
+  fetchPopularBatch(0);
+}
+function morePopular(){                                // "Show more" tap: reveal + pull a fresh varied batch
+  railClicks++;
+  rerenderIdleRail();
+  if ((RAIL_FIRST + railClicks * RAIL_STEP) >= popRail.recs.length && !popRail.loading){
+    fetchPopularBatch((popRail.batch || 0) + 1);
+  }
 }
 function loadPopPhotos(){
   if (!placesKeyReady()) return;
@@ -1048,8 +1066,9 @@ function loadPopPhotos(){
 }
 function popularRail(){
   if (!placesKeyReady() || !home()) return '';        // discovery-only: nothing to suggest without Google + a home point
-  var pops = popRail.recs;
-  if (!pops.length) return '';
+  var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
+  var pops = popRail.recs.filter(function(r){ return !saved[r.placeId]; });   // a place saved from the rail drops off it
+  if (!pops.length) return popRail.loading ? '<h2>Most popular nearby <small>finding spots…</small></h2>' : '';
   var shown = pops.slice(0, RAIL_FIRST + railClicks * RAIL_STEP);
   var html = '<h2>Most popular nearby <small>4.5&#9733;+ · 300+ reviews · new to you</small></h2><div class="rail">';
   shown.forEach(function(r){
@@ -1057,12 +1076,11 @@ function popularRail(){
       + '<div class="railname">'+esc(r.name)+'</div>'
       + '<div class="railmeta">&#9733; '+r.rating+' ('+r.ratingCount+') · '+priceLabel(r.priceLevel)+'</div></div>';
   });
-  var left = pops.length - shown.length;
-  if (left > 0 && railClicks < RAIL_CLICKS){
-    html += '<div class="railcard" data-railmore="1"><div class="railmorebox">'
-      + '<span class="arr">&#8594;</span>Show more<span class="cnt">+'+Math.min(RAIL_STEP, left)+' more</span>'
-      + '</div></div>';
-  }
+  /* always offer more — each tap pulls a fresh varied batch from Google */
+  html += '<div class="railcard" data-railmore="1"><div class="railmorebox">'
+    + (popRail.loading ? '<span class="arr">…</span>Finding more'
+                       : '<span class="arr">&#8594;</span>Show more<span class="cnt">fresh picks</span>')
+    + '</div></div>';
   return html + '</div>';
 }
 function nearbyIncludedTypes(){
@@ -1089,43 +1107,106 @@ function nearbyFilter(recs){
     return true;
   });
 }
+/* Clears the active discovery VIEW but keeps the session memory (pool/seen/batch/sig) so the
+   next Let's OG with the same filters continues to fresh batches instead of cold-restarting on
+   the same top-20. A filter/cuisine change is caught by the sig check in discover() and cold-starts. */
 function nearbyReset(){
-  nearby = { active:false, loading:false, error:false, stage:'broad', wide:false,
-    raw:[], pool:[], broad:[], selected:{}, final:[], shown:{}, fetchedAt:0, cuisineOverride:null };
+  nearby.active = false; nearby.loading = false; nearby.error = false; nearby.stage = 'broad';
+  nearby.raw = []; nearby.broad = []; nearby.selected = {}; nearby.final = []; nearby.shown = {};
 }
-function findNearby(){
+/* Google's searchNearby maxes out at 20 results with NO pagination, so a fixed
+   center + rank always returns the same ~20. To keep suggesting genuinely NEW
+   places we vary each batch — alternate POPULARITY/DISTANCE ranking, jitter the
+   search centre around home, and widen the ring on later batches — accumulate
+   the unique finds into nearby.pool, and only ever show places not yet seen. */
+function discoverySig(){
+  var h = home();
+  return JSON.stringify([h && h.lat, h && h.lng, nearby.cuisineOverride, nearby.wide, dist,
+    Object.keys(cuisines).sort(), Object.keys(prices).sort(), mealOn && meal, openNow]);
+}
+/* batch 0 = home; later batches offset the search centre in rotating compass directions,
+   expanding outward every full rotation, so Google returns a different set each time.
+   Verified against the live API: POPULARITY re-ranks the same top spots no matter the centre,
+   but DISTANCE from a shifted centre returns a genuinely different nearest-20 — so batch 0 uses
+   POPULARITY (seed the best) and every later batch uses DISTANCE (see nearbyRank). Shared by
+   discovery + the popular rail. */
+function jitterCenter(radiusM, batch){
+  var h = home();
+  if (!batch) return { latitude:h.lat, longitude:h.lng };
+  var dirs = 8, ring = Math.floor((batch - 1) / dirs) + 1;
+  var ang = ((batch - 1) % dirs) * (2 * Math.PI / dirs);
+  var m = radiusM * 0.5 * ring;
+  return {
+    latitude:  h.lat + (m * Math.cos(ang)) / 111320,
+    longitude: h.lng + (m * Math.sin(ang)) / (111320 * Math.cos(h.lat * Math.PI / 180))
+  };
+}
+function nearbyRank(batch){ return batch === 0 ? 'POPULARITY' : 'DISTANCE'; }
+function nearbyCenter(batch){ return jitterCenter(nearbyRadiusM(), batch); }
+function nearbyFetch(batch){
+  return Places.nearby({
+    includedPrimaryTypes: nearbyIncludedTypes(),
+    excludedPrimaryTypes: ['fast_food_restaurant'],            // discovery is for new sit-down spots, not chains
+    maxResultCount: 20,
+    rankPreference: nearbyRank(batch),
+    languageCode: 'en-AU', regionCode: 'au',
+    locationRestriction: { circle: { center: nearbyCenter(batch), radius: nearbyRadiusM() } }
+  });
+}
+function mergeNearby(recs){
+  var have = {}; nearby.pool.forEach(function(r){ have[r.placeId] = true; });
+  nearbyFilter(recs).forEach(function(r){ if (!have[r.placeId]){ have[r.placeId] = true; nearby.pool.push(r); } });
+}
+function presentBroad(unseen){
+  nearby.shown = {};
+  nearby.broad = sample(unseen, NEARBY_MAX);
+  nearby.broad.forEach(function(r){ nearby.seen[r.placeId] = true; nearby.shown[r.placeId] = true; });
+  nearby.selected = {};
+  if (nearby.batch === 0 && nearby.pool.length && nearby.pool.length <= 3){   // tiny pool: skip the shortlist, go to the wheel set
+    nearby.final = nearby.broad.slice();
+    nearby.stage = 'final';
+    renderSpin(); loadFinalPhotos();
+  } else {
+    nearby.stage = 'broad';
+    renderSpin(); loadBroadPhotos();
+  }
+}
+/* fresh=true: a new search (Let's OG / cuisine / widen). Cold-starts only when the search
+   signature changed or the pool is empty; otherwise it advances to the next batch so repeat
+   taps keep surfacing new spots. fresh=false is "show a different 15" — always advance. */
+function discover(fresh){
   if (nearby.loading) return;
   if (!placesKeyReady()) return;
   if (!home()){ openHome(); return; }
+  var sig = discoverySig();
+  var cold = fresh && (nearby.sig !== sig || !nearby.pool.length);
+  if (cold){ nearby.pool = []; nearby.seen = {}; nearby.batch = 0; }
+  else { nearby.batch = (nearby.batch || 0) + 1; }
+  nearby.sig = sig;
   nearby.loading = true; nearby.error = false; nearby.active = true; draw.active = false;
   renderDiscovery(document.getElementById('spinaction'));      // skeleton rows
-  var h = home();
-  Places.nearby({
-    includedPrimaryTypes: nearbyIncludedTypes(),
-    excludedPrimaryTypes: ['fast_food_restaurant'],            // discovery is for new sit-down spots, not chains
-    maxResultCount: 20, rankPreference: 'POPULARITY', languageCode: 'en-AU', regionCode: 'au',
-    locationRestriction: { circle: { center:{ latitude:h.lat, longitude:h.lng }, radius: nearbyRadiusM() } }
-  }).then(function(recs){
-    nearby.loading = false; nearby.fetchedAt = Date.now();
-    nearby.raw = recs;
-    nearby.pool = nearbyFilter(recs);
-    nearby.shown = {};
-    nearby.broad = sample(nearby.pool, NEARBY_MAX);            // whole pool when <15; always populated for "back to the long list"
-    nearby.broad.forEach(function(r){ nearby.shown[r.placeId] = true; });
-    nearby.selected = {};
-    if (nearby.pool.length && nearby.pool.length <= 3){        // 1-3 found: skip the shortlist, go straight to the wheel set
-      nearby.final = nearby.broad.slice();
-      nearby.stage = 'final';
-      renderSpin(); loadFinalPhotos();
-    } else {                                                    // 0 -> broad empty state (widen/clear-cuisine recovery); >3 -> the 15
-      nearby.stage = 'broad';
-      renderSpin(); loadBroadPhotos();
+  nearbyFetch(nearby.batch).then(function(recs){
+    nearby.loading = false; nearby.fetchedAt = Date.now(); nearby.raw = recs;
+    mergeNearby(recs);
+    var unseen = nearby.pool.filter(function(r){ return !nearby.seen[r.placeId]; });
+    if (!unseen.length){
+      if (nearby.pool.length){                                 // nothing new this batch: recycle the pool so a tap still refreshes
+        nearby.seen = {};
+        unseen = nearby.pool.slice();
+        toast('Looped back through the best spots nearby.');
+      } else {                                                  // genuinely nothing (empty-state recovery: widen / clear cuisine)
+        nearby.stage = 'broad'; nearby.broad = [];
+        renderSpin(); return;
+      }
     }
+    presentBroad(unseen);
   }).catch(function(){
     nearby.loading = false; nearby.error = true;
     renderSpin();
   });
 }
+function findNearby(){ discover(true); }                        // Let's OG / cuisine spin / retry
+function moreLocations(){ discover(false); }                    // "show a different 15"
 function toggleBroadPick(pid){
   if (nearby.selected[pid]){ delete nearby.selected[pid]; }
   else {
@@ -1142,15 +1223,6 @@ function goFinal(recs){
   loadFinalPhotos();
 }
 function autoPickThree(){ goFinal(sample(nearby.broad, Math.min(3, nearby.broad.length))); }
-function moreFifteen(){
-  var rest = nearby.pool.filter(function(r){ return !nearby.shown[r.placeId]; });
-  if (!rest.length){ toast('That’s everything nearby — spin what you’ve got.'); return; }
-  nearby.broad = sample(rest, NEARBY_MAX);
-  nearby.broad.forEach(function(r){ nearby.shown[r.placeId] = true; });
-  nearby.selected = {};
-  renderDiscovery(document.getElementById('spinaction'));
-  loadBroadPhotos();
-}
 /* broad stage: resolve photos for the 15 shown rows only (one cheap media call each, cached on the rec) */
 function loadBroadPhotos(){
   if (!placesKeyReady()) return;
@@ -1529,12 +1601,16 @@ function renderOptions(host){
 }
 
 function renderRelaxation(host){
+  /* the popular-nearby rail is a discovery surface, independent of the saved list — show it here
+     too so an empty or fully-filtered list still gets Google suggestions, not just a dead end. */
+  var railHtml = popularRail();
   /* raw pool = visited/blocked only, everything else off */
   var raw = placesArr().filter(function(p){ return !p.visitedAt && !p.blocked; }).length;
   if (raw < 3){
-    host.innerHTML = '<div class="relax"><p>The list is running dry. Add a couple of places.</p>'
+    host.innerHTML = railHtml + '<div class="relax"><p>The list is running dry. Add a couple of places.</p>'
       + '<button class="relaxchip" id="relax-add">Add a place</button>'
       + discoveryBtnsHtml() + '</div>';
+    loadPopularRail();
     return;
   }
   /* try dropping each active filter individually, pick the one that recovers the most */
@@ -1553,7 +1629,8 @@ function renderRelaxation(host){
     html += '<button class="relaxchip" data-relax="'+best.key+'">'+best.label+' (+'+best.n+')</button>';
   }
   html += '<button class="relaxclear" id="relax-clear">clear all filters</button>' + discoveryBtnsHtml() + '</div>';
-  host.innerHTML = html;
+  host.innerHTML = railHtml + html;
+  loadPopularRail();
 }
 
 function renderList(){
@@ -1993,7 +2070,7 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
   var bpick = ev.target.closest('[data-bpick]'); if (bpick){ toggleBroadPick(bpick.dataset.bpick); return; }
   if (ev.target.closest('#npickspin')){ goFinal(selectedRecs()); spinFinalWheel(); return; }
   if (ev.target.closest('#nauto')){ autoPickThree(); return; }
-  if (ev.target.closest('#nmore15')){ moreFifteen(); return; }
+  if (ev.target.closest('#nmore15')){ moreLocations(); return; }
   if (ev.target.closest('#nclearcuisine')){ nearby.cuisineOverride = null; findNearby(); return; }
   /* discovery: final stage */
   var fopen = ev.target.closest('[data-fopen]'); if (fopen){ var fr = nearbyRec(fopen.dataset.fopen); if (fr) openResult({ src:'nearby', rec:fr, savedId:null }); return; }
@@ -2002,13 +2079,7 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
   if (ev.target.closest('#nearbyretry')){ findNearby(); return; }
   if (ev.target.closest('#nearbyback')){ nearbyReset(); renderSpin(); return; }
   if (ev.target.closest('#nearbywiden')){ nearby.wide = true; findNearby(); return; }
-  if (ev.target.closest('[data-railmore]')){
-    var railEl = document.querySelector('.rail');
-    var sx = railEl ? railEl.scrollLeft : 0;
-    railClicks++; renderSpin();
-    railEl = document.querySelector('.rail'); if (railEl) railEl.scrollLeft = sx;
-    return;
-  }
+  if (ev.target.closest('[data-railmore]')){ morePopular(); return; }
   var pc = ev.target.closest('[data-poprail]'); if (pc){ var pr = popRailRec(pc.dataset.poprail); if (pr) openResult({ src:'nearby', rec:pr, savedId:null }); return; }
   var rc = ev.target.closest('[data-rail]'); if (rc){ openResult({ src:'saved', id: rc.dataset.rail }); return; }
   var oc = ev.target.closest('.optcard'); if (oc && oc.dataset.opt){ openResult({ src:'saved', id: oc.dataset.opt }); return; }
