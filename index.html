@@ -87,6 +87,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 }
 .chip .caret{font-size:8px; opacity:.65}
 .chip.on{background:var(--ink); color:var(--bg)}
+.chip.clearchip{background:transparent; border:1.5px dashed var(--ink); opacity:.75}
 
 /* filter bottom sheet */
 #fsheet{text-align:center}
@@ -662,12 +663,12 @@ function mapDetails(d){
 
 /* ==================== device-local state ==================== */
 var user = localStorage.getItem('lt-user') || '';
-var dist = localStorage.getItem('lt-dist') || 'any';        // remembered: near|mid|any
-var meal = clockMeal();                                      // auto from clock each load
-var mealOn = true;                                           // meal-window filter active
-var openNow = isWeekend();                                   // defaults ON on weekends
-var ratingMin = 4;                                           // rating floor on the saved-list draw: 0=off, else 4 / 4.3 / 4.5
-var kidOn = true;                                            // kid-friendly filter, default-on (toggleable, not baked into a mode)
+var dist = 'any';                                            // session-only like the rest: near|mid|any, no filter carries over a reload
+var meal = clockMeal();                                      // auto from clock each load (used only when mealOn is switched on)
+var mealOn = false;                                          // no filters selected by default: the Hit List draws from the whole list
+var openNow = false;
+var ratingMin = 0;                                           // rating floor on the saved-list draw: 0=off, else 4 / 4.3 / 4.5
+var kidOn = false;
 var cuisines = {};                                           // session only (set of cuisine strings)
 var prices = {};                                             // session only (set of 1/2/3)
 
@@ -682,7 +683,6 @@ var state = null;
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function clockMeal(){ return (new Date()).getHours() < 15 ? 'lunch' : 'dinner'; }
-function isWeekend(){ var d = (new Date()).getDay(); return d === 0 || d === 6; }
 
 /* safe getters (Firebase drops empty nodes) */
 function settings(){ return (state && state.settings) || {}; }
@@ -1260,6 +1260,16 @@ function render(){
 
 function mealVerb(){ return meal === 'lunch' ? 'lunch' : 'dinner'; }
 
+function anyFilterOn(){
+  return dist !== 'any' || Object.keys(cuisines).length > 0 || Object.keys(prices).length > 0
+    || ratingMin > 0 || mealOn || openNow || kidOn;
+}
+function clearAllFilters(){
+  mealOn = false; openNow = false; ratingMin = 0; kidOn = false;
+  dist = 'any';
+  cuisines = {}; prices = {};
+}
+
 function chipHtml(kind, label, on){
   return '<button class="chip'+(on?' on':'')+'" data-fs="'+kind+'">'+label+' <span class="caret">&#9660;</span></button>';
 }
@@ -1273,7 +1283,8 @@ function renderFilters(){
     + chipHtml('cuisine', cuLbl, cuKeys.length > 0)
     + chipHtml('price', prLbl, prKeys.length > 0)
     + chipHtml('rating', ratingMin > 0 ? ratingMin+'+ &#9733;' : 'Rating', ratingMin > 0)
-    + chipHtml('more', moreN ? 'More · '+moreN : 'More', moreN > 0);
+    + chipHtml('more', moreN ? 'More · '+moreN : 'More', moreN > 0)
+    + (anyFilterOn() ? '<button class="chip clearchip" id="clearfilters">Clear all &#10005;</button>' : '');
 }
 
 /* ==================== filter sheets (draft state, deferred Apply) ==================== */
@@ -1895,6 +1906,7 @@ document.getElementById('fab').addEventListener('click', openAdd);
 /* filter chips open their sheet */
 document.getElementById('view-spin').addEventListener('click', function(ev){
   var fc = ev.target.closest('[data-fs]'); if (fc){ openFilterSheet(fc.dataset.fs); return; }
+  if (ev.target.closest('#clearfilters')){ clearAllFilters(); draw.active = false; nearby.active = false; renderSpin(); return; }
   if (ev.target.closest('#findbtn')){ findOptions(); return; }
   if (ev.target.closest('#surprisebtn')){ nearby.wide = false; nearby.cuisineOverride = null; findNearby(); return; }
   if (ev.target.closest('#cuisinespin')){ spinCuisine(); return; }
@@ -1929,13 +1941,13 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
     else if (k === 'open') openNow = false;
     else if (k === 'rating') ratingMin = 0;
     else if (k === 'kid') kidOn = false;
-    else if (k === 'dist'){ dist = 'any'; localStorage.setItem('lt-dist', dist); }
+    else if (k === 'dist'){ dist = 'any'; }
     else if (k === 'cuisine') cuisines = {};
     else if (k === 'price') prices = {};
     findOptions(); return;
   }
   if (ev.target.closest('#relax-clear')){
-    mealOn = false; openNow = false; ratingMin = 0; kidOn = false; dist = 'any'; localStorage.setItem('lt-dist','any'); cuisines = {}; prices = {};
+    clearAllFilters();
     findOptions(); return;
   }
   if (ev.target.closest('#relax-add')){ openAdd(); return; }
@@ -1969,7 +1981,6 @@ document.getElementById('filter-overlay').addEventListener('click', function(ev)
 });
 function fsCommitDraft(){
   fsApplyGlobals(fs.draft);
-  localStorage.setItem('lt-dist', dist);
   closeFilterSheet();
   draw.active = false; nearby.active = false;
   renderSpin();
