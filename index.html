@@ -44,7 +44,36 @@ header{
   padding:calc(10px + env(safe-area-inset-top)) 18px 8px;
   border-bottom:1px solid var(--line);
 }
-.brand{display:flex; align-items:baseline; justify-content:space-between}
+.brand{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+.brandright{display:flex; align-items:center; gap:10px; flex:0 0 auto}
+#gear{font-size:20px; line-height:1; color:var(--muted); padding:2px 2px 2px 0}
+#gear:active{color:var(--ink)}
+/* settings */
+.setsec{text-align:left; margin:18px 0 0}
+.setsec h4{
+  margin:0 0 8px; font-size:11px; font-weight:800; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.4px;
+}
+.setrow{
+  background:var(--raised); border-radius:12px; padding:12px; margin-bottom:8px;
+  display:flex; align-items:center; gap:10px; text-align:left; width:100%;
+}
+.setrow .sr-body{flex:1; min-width:0}
+.setrow .sr-k{font-size:13px; font-weight:800; color:var(--ink)}
+.setrow .sr-v{font-size:12px; font-weight:700; color:var(--muted); margin-top:2px; word-break:break-word}
+.setrow .sr-act{flex:0 0 auto; font-size:12px; font-weight:900; color:var(--acc); padding:6px 4px}
+.setrow.warn{background:var(--tomato-tint)}
+.setrow.warn .sr-k{color:var(--tomato)}
+.kmrow{display:flex; gap:8px}
+.kmrow .field{flex:1; margin:0}
+.kmrow input{
+  width:100%; border:1px solid var(--line); border-radius:12px; padding:11px;
+  background:var(--raised); font-weight:800;
+}
+.kmrow label{display:block; font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px}
+.setnote{font-size:11px; font-weight:700; color:var(--muted); opacity:.85; line-height:1.45; margin:6px 2px 0; text-align:left}
+.setnote.bad{color:var(--tomato); opacity:1}
+.dot-ok{color:var(--acc)} .dot-warn{color:var(--saffron)} .dot-bad{color:var(--tomato)}
 .brand h1{margin:0; font-size:30px; font-weight:900; letter-spacing:-.5px}
 .brand h1 .dot{color:var(--acc)}
 .subtag{font-size:12px; font-weight:700; color:var(--muted)}
@@ -56,7 +85,7 @@ header{
 
 main{max-width:520px; margin:0 auto}
 .view{display:none; padding:8px 18px 24px}
-body[data-tab="spin"] #view-spin, body[data-tab="list"] #view-list{display:block}
+body[data-tab="spin"] #view-spin, body[data-tab="list"] #view-list, body[data-tab="map"] #view-map{display:block}
 h2{font-size:17px; font-weight:900; margin:16px 0 10px}
 h2 small{font-weight:700; color:var(--muted); font-size:12px}
 
@@ -239,6 +268,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 }
 .fab:active{transform:translateY(2px)}
 body[data-tab="spin"].funnelbroad .fab{display:none}   /* keep the FAB off the sticky pick bar */
+body[data-tab="map"] .fab{display:none}
 
 /* tabbar */
 nav{
@@ -253,7 +283,7 @@ nav button{
   font-size:11px; font-weight:800; color:var(--muted); border-radius:12px; padding:7px 0;
 }
 nav button .ico{font-size:22px; line-height:1}
-body[data-tab="spin"] nav .t-spin, body[data-tab="list"] nav .t-list{color:var(--ink); background:var(--raised)}
+body[data-tab="spin"] nav .t-spin, body[data-tab="list"] nav .t-list, body[data-tab="map"] nav .t-map{color:var(--ink); background:var(--raised)}
 
 /* overlays */
 .overlay{
@@ -317,6 +347,123 @@ textarea.txtinput{min-height:60px; resize:vertical}
 .spinner{width:20px; height:20px; border:3px solid var(--line); border-top-color:var(--acc); border-radius:50%; display:inline-block; animation:spin 1s linear infinite; vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ===== map (phase 4) ===== */
+.maptoggles{display:flex; gap:8px; margin:10px 0 8px; flex-wrap:wrap}
+#mapbox{
+  position:relative; border-radius:16px; overflow:hidden; background:var(--raised);
+  height:calc(100dvh - 250px); min-height:320px;
+}
+#map{position:absolute; inset:0}
+#mapmsg{
+  position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+  text-align:center; padding:26px; font-size:14px; font-weight:700; color:var(--muted);
+  line-height:1.5; background:var(--raised); z-index:2;
+}
+#mapmsg.show{display:flex}
+#mapmsg button{
+  display:block; margin:12px auto 0; background:var(--acc); color:#0A0A0A;
+  font-weight:900; font-size:14px; border-radius:99px; padding:11px 20px;
+}
+#mapmsg code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--ink)}
+
+/* ===== places search + sort (phase 4) ===== */
+.searchrow{display:flex; gap:8px; align-items:center; margin:10px 0 2px}
+.searchwrap{flex:1; position:relative; display:flex; align-items:center}
+.searchwrap .sicon{position:absolute; left:11px; font-size:13px; opacity:.6; pointer-events:none}
+.searchwrap input{
+  width:100%; background:var(--raised); border:1px solid var(--line); border-radius:99px;
+  padding:11px 34px 11px 32px; font-weight:700; font-size:15px;
+  -webkit-appearance:none; appearance:none;
+}
+.searchwrap input::placeholder{color:var(--muted); font-weight:700}
+.searchwrap input::-webkit-search-cancel-button{display:none}
+.searchwrap #searchclear{
+  position:absolute; right:6px; width:26px; height:26px; border-radius:50%;
+  color:var(--muted); font-size:13px; font-weight:900; display:none;
+}
+.searchwrap.filled #searchclear{display:block}
+#listsort{
+  flex:0 0 auto; max-width:44%; background:var(--raised); border:1px solid var(--line);
+  border-radius:99px; padding:11px 12px; font-weight:800; font-size:13px;
+  -webkit-appearance:none; appearance:none; text-align:center;
+}
+
+/* ===== place detail sheet (phase 4) ===== */
+.d-head{display:flex; align-items:flex-start; gap:10px; text-align:left}
+.d-head h3{flex:1; margin:0; font-size:22px; font-weight:900; line-height:1.15}
+.starbtn{
+  flex:0 0 auto; font-size:26px; line-height:1; padding:2px 4px; color:var(--muted);
+  filter:grayscale(1); opacity:.5; transition:transform .12s ease;
+}
+.starbtn.on{filter:none; opacity:1; color:var(--saffron)}
+.starbtn:active{transform:scale(1.25)}
+.d-meta{text-align:left; font-size:13px; font-weight:800; color:var(--muted); margin:6px 0 10px}
+.d-meta .sep{opacity:.45; margin:0 6px}
+.d-meta .rate{color:var(--saffron)}
+.starbadge{color:var(--saffron); font-weight:900}
+/* hours */
+.d-hours{text-align:left; margin:0 0 12px}
+.d-hours .hline{
+  font-size:14px; font-weight:800; border-radius:10px; padding:9px 12px;
+  background:var(--raised); color:var(--muted); display:flex; align-items:center; gap:8px;
+}
+.d-hours .hline.open{background:var(--basil-tint); color:var(--basil)}
+.d-hours .hline.shut{background:var(--tomato-tint); color:var(--tomato)}
+.d-hours .hline .caret{margin-left:auto; font-size:9px; opacity:.7}
+.d-hours .week{display:none; margin:6px 2px 0; font-size:13px; font-weight:700; color:var(--muted)}
+.d-hours.open-week .week{display:block}
+.d-hours .week div{padding:3px 0; display:flex; gap:8px; justify-content:space-between}
+.d-hours .week div.today{color:var(--ink); font-weight:900}
+.d-hours .stale{font-size:11px; font-weight:700; color:var(--muted); opacity:.8; margin:6px 2px 0}
+/* address + section headers */
+.d-addr{
+  text-align:left; font-size:13px; font-weight:700; color:var(--muted);
+  background:var(--raised); border-radius:12px; padding:11px 12px; margin:10px 0;
+  width:100%; display:block; line-height:1.4;
+}
+.d-sec{
+  text-align:left; font-size:11px; font-weight:800; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.4px; margin:16px 0 8px;
+}
+/* visit history */
+.d-visits{text-align:left}
+.visitrow{background:var(--raised); border-radius:12px; padding:10px 12px; margin-bottom:8px}
+.visitrow .vtop{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800}
+.visitrow .vdate{color:var(--ink)}
+.visitrow .vstars{color:var(--saffron); letter-spacing:1px}
+.visitrow .vworth{font-size:11px; font-weight:800; border-radius:7px; padding:2px 7px; background:var(--basil-tint); color:var(--basil)}
+.visitrow .vworth.no{background:var(--tomato-tint); color:var(--tomato)}
+.visitrow .vedit{margin-left:auto; color:var(--muted); font-size:12px; font-weight:800; padding:2px 4px}
+.visitrow .vnotes{font-size:13px; font-weight:700; color:var(--muted); margin-top:5px; line-height:1.4}
+.visitrow .vby{font-size:11px; font-weight:700; color:var(--muted); opacity:.75; margin-top:4px}
+.d-novisits{text-align:left; font-size:13px; font-weight:700; color:var(--muted); padding:2px 0 4px}
+/* collapsible edit block */
+.d-edit{margin-top:14px}
+.d-edit>summary{
+  list-style:none; cursor:pointer; background:var(--raised); border-radius:12px;
+  padding:12px; font-weight:900; font-size:14px; text-align:left; display:flex; align-items:center;
+}
+.d-edit>summary::-webkit-details-marker{display:none}
+.d-edit>summary::after{content:'\25BC'; margin-left:auto; font-size:9px; opacity:.7}
+.d-edit[open]>summary::after{content:'\25B2'}
+.d-edit .field{margin:12px 0 0; text-align:left}
+.d-edit label{display:block; font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px}
+/* visit sheet */
+.starpick{display:flex; gap:6px; justify-content:center; margin:4px 0 2px}
+.starpick button{font-size:32px; line-height:1; filter:grayscale(1); opacity:.45; padding:2px}
+.starpick button.on{filter:none; opacity:1}
+.tri{display:flex; gap:8px; margin:4px 0}
+.tri button{
+  flex:1; background:var(--raised); color:var(--muted); font-weight:900; font-size:14px;
+  border-radius:99px; padding:11px;
+}
+.tri button.on{background:var(--acc); color:#0A0A0A}
+.tri button.on.no{background:var(--tomato); color:#0A0A0A}
+.dateinput{
+  width:100%; border:1px solid var(--line); border-radius:12px; padding:12px;
+  background:var(--raised); margin-bottom:10px; color-scheme:dark;
+}
+
 /* wheel */
 #wheelbox{position:relative; width:min(80vw,300px); height:min(80vw,300px); margin:6px auto 0}
 #pointer{
@@ -356,7 +503,10 @@ textarea.txtinput{min-height:60px; resize:vertical}
 <header>
   <div class="brand">
     <h1>Lucky Table<span class="dot">.</span></h1>
-    <span class="subtag" id="subtag"></span>
+    <div class="brandright">
+      <span class="subtag" id="subtag"></span>
+      <button id="gear" aria-label="Settings">&#9881;</button>
+    </div>
   </div>
   <div id="modebanner"></div>
 </header>
@@ -371,6 +521,15 @@ textarea.txtinput{min-height:60px; resize:vertical}
 
   <!-- ===== LIST VIEW ===== -->
   <section class="view" id="view-list">
+    <div class="searchrow">
+      <div class="searchwrap">
+        <span class="sicon">&#128269;</span>
+        <input id="listsearch" type="search" autocomplete="off" autocorrect="off"
+               autocapitalize="none" spellcheck="false" placeholder="Search places">
+        <button id="searchclear" aria-label="Clear search">&#10005;</button>
+      </div>
+      <select id="listsort" aria-label="Sort places"></select>
+    </div>
     <div style="display:flex; justify-content:center; margin:10px 0 4px">
       <div class="seg" id="listseg">
         <button data-seg="try" class="on">Want to try</button>
@@ -379,6 +538,15 @@ textarea.txtinput{min-height:60px; resize:vertical}
     </div>
     <div id="listcards"></div>
   </section>
+
+  <!-- ===== MAP VIEW ===== -->
+  <section class="view" id="view-map">
+    <div class="maptoggles" id="maptoggles">
+      <button class="chip on" data-mtoggle="try">Want to try</button>
+      <button class="chip on" data-mtoggle="been">Been</button>
+    </div>
+    <div id="mapbox"><div id="map"></div><div id="mapmsg"></div></div>
+  </section>
 </main>
 
 <button class="fab" id="fab">+</button>
@@ -386,6 +554,7 @@ textarea.txtinput{min-height:60px; resize:vertical}
 <nav>
   <button class="t-spin" data-tab="spin"><span class="ico">&#127869;</span>Dine out</button>
   <button class="t-list" data-tab="list"><span class="ico">&#128205;</span>Places</button>
+  <button class="t-map" data-tab="map"><span class="ico">&#128506;</span>Map</button>
 </nav>
 
 <!-- who overlay -->
@@ -479,6 +648,52 @@ textarea.txtinput{min-height:60px; resize:vertical}
 <!-- list detail overlay -->
 <div class="overlay" id="detail-overlay">
   <div class="sheet" id="detail-sheet"></div>
+</div>
+
+<!-- settings -->
+<div class="overlay" id="settings-overlay">
+  <div class="sheet" id="settings-sheet">
+    <h3>Settings</h3>
+    <div id="settings-body"></div>
+    <div class="sheetbtns"><button class="quiet" id="set-close">Close</button></div>
+  </div>
+</div>
+
+<!-- log-a-visit sheet (replaces the old native confirm) -->
+<div class="overlay" id="visit-overlay">
+  <div class="sheet" id="visit-sheet">
+    <h3 id="v-title">Log a visit</h3>
+    <p id="v-sub"></p>
+    <div class="field" style="text-align:left">
+      <label>When</label>
+      <input type="date" class="dateinput" id="v-date">
+    </div>
+    <div class="field" style="text-align:left">
+      <label>Your rating <span style="text-transform:none; letter-spacing:0">(optional)</span></label>
+      <div class="starpick" id="v-stars">
+        <button data-star="1">&#11088;</button><button data-star="2">&#11088;</button>
+        <button data-star="3">&#11088;</button><button data-star="4">&#11088;</button>
+        <button data-star="5">&#11088;</button>
+      </div>
+      <button class="quiet" id="v-clearstars" style="color:var(--muted); font-weight:800; font-size:12px; display:block; margin:0 auto">clear rating</button>
+    </div>
+    <div class="field" style="text-align:left">
+      <label>Worth going back?</label>
+      <div class="tri" id="v-worth">
+        <button data-worth="yes">Yes</button>
+        <button data-worth="no" class="no">No</button>
+      </div>
+    </div>
+    <div class="field" style="text-align:left">
+      <label>Notes <span style="text-transform:none; letter-spacing:0">(optional)</span></label>
+      <textarea class="txtinput" id="v-notes" placeholder="get the pork belly, skip the entrees"></textarea>
+    </div>
+    <div class="sheetbtns">
+      <button class="primary" id="v-save">Save visit</button>
+      <button class="danger" id="v-delete" style="display:none">Delete this visit</button>
+      <button class="quiet" id="v-cancel">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <!-- filter sheet (one skeleton, content rendered per filter) -->
@@ -674,6 +889,72 @@ var Places = {
   }
 };
 function chk(r){ if (!r.ok) return r.text().then(function(t){ throw new Error(r.status+' '+t); }); return r.json(); }
+
+/* ==================== Places call counter (phase 4) ====================
+   Device-local diagnostics, never synced. This is NOT the Cloud Console quota — it counts
+   calls made from THIS phone since local midnight. It exists to catch a runaway loop early,
+   not to reconcile a bill, and the Settings screen says so.
+
+   Day keys are built from local date parts: Date.now()/86400000 rolls over at UTC midnight,
+   which is mid-morning in Melbourne, so a UTC-keyed counter would reset in the middle of a
+   day's usage. */
+var API_KEEP_DAYS = 7;
+function apiDayKey(d){
+  d = d || new Date();
+  return 'lt-api-' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function apiRead(k){
+  try { var o = JSON.parse(localStorage.getItem(k) || '{}'); return (o && typeof o === 'object') ? o : {}; }
+  catch(e){ return {}; }
+}
+function apiTick(kind){
+  var k = apiDayKey(), o = apiRead(k);
+  o[kind] = (o[kind] || 0) + 1;
+  try { localStorage.setItem(k, JSON.stringify(o)); } catch(e){}
+}
+function apiFail(kind, msg){
+  try { localStorage.setItem('lt-api-lasterr', JSON.stringify({ kind:kind, msg:String(msg).slice(0,200), at:Date.now() })); } catch(e){}
+}
+function apiLastErr(){
+  try { return JSON.parse(localStorage.getItem('lt-api-lasterr') || 'null'); } catch(e){ return null; }
+}
+function apiToday(){
+  var o = apiRead(apiDayKey()), total = 0;
+  Object.keys(o).forEach(function(k){ total += o[k]; });
+  return { byKind:o, total:total };
+}
+function apiPrune(){
+  var keep = {};
+  for (var i=0;i<API_KEEP_DAYS;i++){
+    var d = new Date(); d.setDate(d.getDate() - i);
+    keep[apiDayKey(d)] = 1;
+  }
+  for (var j=localStorage.length-1; j>=0; j--){
+    var k = localStorage.key(j);
+    if (k && k.indexOf('lt-api-') === 0 && k !== 'lt-api-lasterr' && !keep[k]){
+      try { localStorage.removeItem(k); } catch(e){}
+    }
+  }
+}
+/* Wrap every Places method once, rather than editing each one. Counting the REJECTION
+   (not just a non-2xx via chk) means a network drop or a CORS/referrer-restriction
+   failure — the exact symptom of a misconfigured key — is recorded as an error too. */
+(function(){
+  Object.keys(Places).forEach(function(name){
+    var orig = Places[name];
+    if (typeof orig !== 'function') return;
+    Places[name] = function(){
+      apiTick(name);
+      var out;
+      try { out = orig.apply(Places, arguments); }
+      catch(e){ apiFail(name, e && e.message || e); throw e; }
+      if (out && typeof out.then === 'function'){
+        return out.catch(function(e){ apiFail(name, e && e.message || e); throw e; });
+      }
+      return out;
+    };
+  });
+})();
 var PRICE_ENUM = { PRICE_LEVEL_INEXPENSIVE:1, PRICE_LEVEL_MODERATE:2, PRICE_LEVEL_EXPENSIVE:3, PRICE_LEVEL_VERY_EXPENSIVE:3 };
 function mapDetails(d){
   var loc = d.location || {};
@@ -719,8 +1000,40 @@ var mealOn = false;                                          // no filters selec
 var openNow = false;
 var ratingMin = 0;                                           // rating floor on the saved-list draw: 0=off, else 4 / 4.3 / 4.5
 var kidOn = false;
+var starOn = false;                                          // favourites-only draw, session like the rest
 var cuisines = {};                                           // session only (set of cuisine strings)
 var prices = {};                                             // session only (set of 1/2/3)
+
+/* Places-tab browse controls. Search is session-only (a stale query hiding the list on
+   reopen would be baffling); sort order IS sticky, because it's a standing preference
+   rather than a per-decision filter. */
+var listQuery = '';
+var SORTS = [
+  { key:'added',   label:'Recently added',    cmp:function(a,b){ return (b.addedAt||0) - (a.addedAt||0); } },
+  { key:'oldest',  label:'Longest on list',   cmp:function(a,b){ return (a.addedAt||0) - (b.addedAt||0); } },
+  { key:'near',    label:'Nearest',           needsHome:true,
+    cmp:function(a,b){ return nullsLast(distOrNull(a), distOrNull(b), false); } },
+  { key:'rating',  label:'Rating',            cmp:function(a,b){ return nullsLast(a.rating, b.rating, true); } },
+  { key:'cuisine', label:'Cuisine',           cmp:function(a,b){ return strCmp(a.cuisine, b.cuisine) || strCmp(a.name, b.name); } },
+  { key:'name',    label:'Name',              cmp:function(a,b){ return strCmp(a.name, b.name); } }
+];
+var listSort = localStorage.getItem('lt-sort') || 'added';
+function distOrNull(p){ var h = home(); return h ? driveDistanceKm(p, h) : null; }
+function strCmp(a, b){ return String(a||'￿').toLowerCase().localeCompare(String(b||'￿').toLowerCase()); }
+/* Unknown values always sort to the BOTTOM, whichever direction the known ones run —
+   an unrated place must never lead a rating sort just because null compares low. */
+function nullsLast(a, b, desc){
+  var an = (a == null), bn = (b == null);
+  if (an && bn) return 0;
+  if (an) return 1;
+  if (bn) return -1;
+  return desc ? (b - a) : (a - b);
+}
+function activeSort(){
+  var s = SORTS.filter(function(x){ return x.key === listSort; })[0];
+  if (s && s.needsHome && !home()) s = null;      // home was cleared while "Nearest" was selected
+  return s || SORTS[0];
+}
 
 /* draw session */
 var draw = { active:false, options:[], firstSet:[], reshuffleUsed:false, pick:null };
@@ -734,6 +1047,13 @@ var state = null;
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function clockMeal(){ return (new Date()).getHours() < 15 ? 'lunch' : 'dinner'; }
+/* Day index in the PHONE's timezone. Date.now()/86400000 rolls over at UTC midnight, which
+   in Melbourne is 10 or 11am — anything "daily" would visibly reshuffle mid-morning. Both
+   phones are in the same timezone, so this still gives them the same number. */
+function localDay(){
+  var d = new Date();
+  return Math.floor((d.getTime() - d.getTimezoneOffset()*60000) / 86400000);
+}
 
 /* safe getters (Firebase drops empty nodes) */
 function settings(){ return (state && state.settings) || {}; }
@@ -746,6 +1066,81 @@ function placesArr(){
   return Object.keys(o).map(function(id){ var p = o[id]; p = p || {}; return Object.assign({ id:id }, p); });
 }
 function place(id){ return placesObj()[id] || null; }
+
+/* ==================== visits + pool state (phase 4) ====================
+   `visits` is a keyed map, not an array: RTDB turns arrays into index-keyed objects and
+   path-patch writes against them are a foot-gun. Always sort by `at`, never by key.
+
+   TWO INDEPENDENT FACTS, deliberately not derived from each other:
+
+     poolState  'want' | 'been'   is this place still in the draw pool? The ONLY field that
+                                  decides. Written on log-a-visit and on "Back in the pool".
+     visits     {}                what actually happened. Permanent. Editing or deleting a
+                                  visit NEVER moves a place between Want to try and Been.
+
+   That separation is the whole point: revive a place, fix a typo in a two-year-old visit
+   note, and it stays where you put it. An earlier draft mirrored `visitedAt` off the latest
+   visit and got this wrong in exactly that case.
+
+   There are no denormalised mirrors. `lastVisitAt`/`lastWorth` are computed at read time
+   (25 places, trivial), which also removes a real concurrency hazard: two phones adding
+   different visits can't race to write a mirror describing the older one. `poolState` is a
+   single scalar where last-write-wins is genuinely correct — both phones logging a visit
+   both want 'been'.
+
+   `visitedAt`/`worthRepeat` are LEGACY. Read once by the migration, never written again. */
+function visitsArr(p){
+  var v = (p && p.visits) || {};
+  return Object.keys(v).map(function(k){ return Object.assign({ vid:k }, v[k] || {}); })
+                       .sort(function(a,b){ return (b.at||0) - (a.at||0); });
+}
+function visitCount(p){ return visitsArr(p).length; }
+function latestVisit(p){ return visitsArr(p)[0] || null; }
+function lastVisitAt(p){ var v = latestVisit(p); return v ? (v.at || null) : null; }
+function lastWorth(p){ var v = latestVisit(p); return v && v.worth != null ? v.worth : null; }
+
+/* Pool membership. Falls back to the legacy field so an un-migrated or offline-cached
+   place still behaves correctly before (or without) a migration ever running. */
+function poolStateOf(p){
+  if (p && p.poolState) return p.poolState;
+  return (p && p.visitedAt) ? 'been' : 'want';
+}
+function isBeen(p){ return poolStateOf(p) === 'been'; }
+
+/* Schema v2: give every legacy place an explicit poolState, and back-fill one visit record
+   for those that were marked visited under the old model.
+
+   Deterministic by construction — fixed visit id, values read from existing fields — so two
+   phones racing on first launch write byte-identical paths. One patch, so it can't half-apply.
+
+   CLOUD ONLY. Never runs against a localStorage snapshot: that cache can be arbitrarily
+   stale, and replaying a synthetic visit into a place that has since been deleted or revived
+   elsewhere would resurrect dead history or create a ghost place under a bare path write. */
+var SCHEMA = 2, LEGACY_VID = 'legacy-v1', schemaChecked = false;
+function migrateSchema(){
+  if (schemaChecked || !state) return;
+  if (Store.mode !== 'cloud' || !Store.ref) return;        // offline: leave the data alone, retry next boot
+  schemaChecked = true;
+  if ((state.settings && state.settings.schema) === SCHEMA) return;
+  var patch = {}, back = 0, stamped = 0;
+  placesArr().forEach(function(p){
+    if (!p.poolState){
+      patch['places/'+p.id+'/poolState'] = p.visitedAt ? 'been' : 'want';
+      stamped++;
+    }
+    /* only synthesise history for a place that was actually marked visited and has none */
+    if (p.visitedAt && !(p.visits && Object.keys(p.visits).length)){
+      patch['places/'+p.id+'/visits/'+LEGACY_VID] = {
+        at: p.visitedAt, rating: null, notes: null,
+        by: p.by || null, worth: (p.worthRepeat == null ? null : p.worthRepeat)
+      };
+      back++;
+    }
+  });
+  patch['settings/schema'] = SCHEMA;
+  Store.patch(patch);
+  console.log('[lucky] schema v'+SCHEMA+': stamped '+stamped+' place(s), back-filled '+back+' visit(s)');
+}
 
 /* ==================== storage layer ==================== */
 var Store = { mode:'local', ref:null };
@@ -762,15 +1157,131 @@ function applyLocalPatch(obj){
     else node[leaf] = obj[path];
   });
 }
+/* Unacknowledged-patch journal.
+
+   Every patch is written to localStorage and only dropped once the SERVER confirms it.
+   Without this, anything typed while Firebase was unreachable — a failed init (local
+   fallback for the whole session), the 4s offline boot, or a write the SDK never got to
+   send before the app was closed — is silently erased by the first remote snapshot on
+   the next successful launch, because that snapshot replaces `state` wholesale. */
+var PENDING_KEY = 'lt-pending';
+var PENDING_MAX_AGE = 7*86400000;   // older than a week: likelier to resurrect stale data than to help
+var PENDING_MAX = 300;
+var pendingSeq = 0, pendingFlushed = false;
+
+function cloudExpected(){ return !!(window.FIREBASE_CONFIG && localStorage.getItem('lt-key')); }
+function pendingRead(){
+  try { var q = JSON.parse(localStorage.getItem(PENDING_KEY)||'[]'); return Array.isArray(q) ? q : []; }
+  catch(e){ return []; }
+}
+function pendingWrite(q){ try { localStorage.setItem(PENDING_KEY, JSON.stringify(q)); } catch(e){} }
+function pendingAdd(obj){
+  var id = Date.now().toString(36)+'-'+(++pendingSeq);
+  var q = pendingRead();
+  q.push({ id:id, t:Date.now(), p:obj });
+  if (q.length > PENDING_MAX) q = q.slice(q.length - PENDING_MAX);
+  pendingWrite(q);
+  return id;
+}
+function pendingDrop(id){
+  pendingWrite(pendingRead().filter(function(e){ return e && e.id !== id; }));
+}
+/* Replay everything the server never confirmed, oldest first, once per connection. Each
+   entry is a set of absolute path writes, so replaying one is idempotent; the value
+   listener echoes the merged result straight back. Runs once because the SDK handles
+   later reconnects itself (queued writes go out and their ack callbacks fire). */
+function pendingFlush(){
+  if (pendingFlushed || Store.mode !== 'cloud' || !Store.ref) return;
+  pendingFlushed = true;
+  var q = pendingRead(), now = Date.now();
+  if (!q.length) return;
+  var live = q.filter(function(e){ return e && e.p && (now - (e.t||0)) <= PENDING_MAX_AGE; });
+  pendingWrite(live);                          // stale entries dropped for good
+  live.forEach(function(e){
+    Store.ref.update(e.p, function(err){ if (!err) pendingDrop(e.id); });
+  });
+}
+
+/* ==================== sync state (phase 4) ====================
+   `connected` comes from Firebase's own .info/connected, not navigator.onLine — the latter
+   lies through captive portals and VPNs. `lastAckAt` is set from the write ACK, never from
+   the value listener: local writes echo back optimistically long before the server has
+   seen them, so an on('value')-driven "last synced" would cheerfully report success while
+   completely offline. */
+var Sync = { connected:false, lastAckAt:null, blocked:null, retrying:false };
+
 Store.patch = function(obj){
+  /* who touched this table, and when — the only durable record of activity. `by` on a place
+     is the original author and visit.at is an editable date, so neither can answer it. */
+  if (user && !obj['members/'+user+'/lastWriteAt']) obj['members/'+user+'/lastWriteAt'] = Date.now();
+  var id = cloudExpected() ? pendingAdd(obj) : null;      // journalled until the server confirms it
   if (Store.mode === 'cloud' && Store.ref){
-    Store.ref.update(obj);                    // local events fire immediately (latency compensation)
+    Store.ref.update(obj, function(err){                  // local events fire immediately (latency compensation)
+      if (!err){
+        if (id) pendingDrop(id);
+        Sync.lastAckAt = Date.now();
+        Sync.blocked = null;
+      } else if (/permission|denied/i.test(err.message || '')){
+        /* a wrong or revoked table code will never succeed by retrying — say so instead of
+           spinning "Syncing…" forever */
+        Sync.blocked = err.message || 'permission denied';
+      }
+      syncBanner();
+    });
   } else {
     applyLocalPatch(obj);
     localStorage.setItem('lt-state', JSON.stringify(state));
     render();
   }
+  syncBanner();
 };
+
+/* Idempotent. Safe to call from the online event, the Settings button, or app foreground.
+   Covers the case boot() cannot: the app opened with no connection, the Firebase CDN
+   scripts never loaded, initLocal() ran, and so no .info/connected listener exists to
+   notice the network coming back. Without this, recovery needs a manual reload. */
+function retryCloudInit(){
+  if (!window.FIREBASE_CONFIG) return Promise.resolve();
+  if (Store.mode === 'cloud' && Store.ref){       // already live — just re-drain the journal
+    pendingFlushed = false; pendingFlush(); syncBanner();
+    return Promise.resolve();
+  }
+  if (Sync.retrying) return Promise.resolve();
+  var key = tableKey();
+  if (!key) return Promise.resolve();
+  Sync.retrying = true; syncBanner();
+  return initCloud(key).then(function(){
+    Sync.retrying = false;
+    pendingFlushed = false; pendingFlush();
+    syncBanner(); render();
+    toast('Back online — syncing');
+  }).catch(function(){
+    Sync.retrying = false; syncBanner();
+  });
+}
+
+function pendingCount(){ return pendingRead().length; }
+
+/* Silent when healthy. The banner only ever appears when something needs saying. */
+function syncBanner(){
+  var b = document.getElementById('modebanner');
+  if (!b) return;
+  var msg = '';
+  if (!window.FIREBASE_CONFIG || !tableKey()){
+    msg = 'Local only — open your invite link to sync';
+  } else if (Sync.blocked){
+    msg = 'Sync blocked — check the table code in Settings';
+  } else if (Store.mode !== 'cloud'){
+    msg = Sync.retrying ? 'Reconnecting…' : 'Offline — changes saved on this phone';
+  } else if (!Sync.connected){
+    msg = 'Offline — changes saved on this phone';
+  } else {
+    var n = pendingCount();
+    if (n) msg = 'Syncing ' + n + (n === 1 ? ' change…' : ' changes…');
+  }
+  b.textContent = msg;
+  b.classList.toggle('show', !!msg);
+}
 
 function tableKey(){
   var m = (location.hash||'').match(/k=([A-Za-z0-9_-]{8,})/);
@@ -778,7 +1289,7 @@ function tableKey(){
   return localStorage.getItem('lt-key') || '';
 }
 
-function seedState(){ return { settings:{ nearKm:DEFAULT_NEAR, midKm:DEFAULT_MID }, places:{} }; }
+function seedState(){ return { settings:{ nearKm:DEFAULT_NEAR, midKm:DEFAULT_MID, schema:SCHEMA }, places:{} }; }
 
 function loadScript(src){
   return new Promise(function(res, rej){
@@ -792,18 +1303,31 @@ function initCloud(key){
   return loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js')
     .then(function(){ return loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js'); })
     .then(function(){
-      firebase.initializeApp(window.FIREBASE_CONFIG);
+      /* re-entrant: retryCloudInit() can land here again after a failed first attempt, and
+         initializeApp throws on a duplicate default app */
+      if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
       Store.ref = firebase.database().ref('luckytable/'+key);
       Store.mode = 'cloud';
+      firebase.database().ref('.info/connected').on('value', function(s){
+        var was = Sync.connected;
+        Sync.connected = !!s.val();
+        /* every reconnect re-drains the journal. pendingFlush() guards itself with
+           pendingFlushed so it runs once per connection, not once per page load. */
+        if (Sync.connected && !was){ pendingFlushed = false; setTimeout(pendingFlush, 0); }
+        syncBanner();
+      });
       return new Promise(function(res){
         Store.ref.on('value', function(snap){
           var v = snap.val();
           if (!v){ Store.ref.set(seedState()); return; }   // brand-new table: seed it
           state = v;
           localStorage.setItem('lt-state', JSON.stringify(state));
-          document.getElementById('modebanner').classList.remove('show');
+          syncBanner();
           res();
           render();
+          /* this snapshot just replaced everything typed offline — put it back */
+          setTimeout(pendingFlush, 0);
+          setTimeout(migrateSchema, 0);        // after the flush, so it sees restored offline writes
         });
       });
     });
@@ -812,6 +1336,9 @@ function initLocal(){
   try { state = JSON.parse(localStorage.getItem('lt-state')||'null'); } catch(e){ state = null; }
   if (!state) state = seedState();
   localStorage.setItem('lt-state', JSON.stringify(state));
+  /* deliberately NO migrateSchema() here — see its comment. Local mode has no authoritative
+     snapshot, and poolStateOf() already falls back to the legacy field, so nothing is broken
+     by waiting for a real connection. */
   return Promise.resolve();
 }
 
@@ -928,10 +1455,11 @@ function computePool(opts){
   if (!opts.ignoreDistance && dist !== 'any' && h) ring = (dist === 'near' ? nearKm() : midKm());
   var cuKeys = Object.keys(cuisines), prKeys = Object.keys(prices);
   return placesArr().filter(function(p){
-    if (p.visitedAt) return false;
+    if (isBeen(p)) return false;
     if (p.blocked) return false;
     if (isExcludedPlace(p)) return false;
     if (!opts.ignoreKid && kidOn && !p.kidFriendly) return false;
+    if (!opts.ignoreStar && starOn && !p.star) return false;
     if (!opts.ignoreMeal && mealOn && !openInMealWindow(p, meal)) return false;
     if (!opts.ignoreOpenNow && openNow && !openRightNow(p)) return false;
     if (ring != null){
@@ -1036,7 +1564,7 @@ var railClicks = 0;
 var popRail = { loading:false, error:false, filling:false, batch:-1, dry:0, recs:[], day:null, homeKey:null };
 var POP_CACHE_KEY = 'lt-poprail';
 function popRailRadiusM(){ return (midKm() || DEFAULT_MID) * 1000; }
-function railDay(){ return Math.floor(Date.now() / 86400000); }   // days since epoch: same calendar day = same value
+function railDay(){ return localDay(); }   // days since epoch, local: same calendar day = same value
 function homeKey(){ var h = home(); return h ? (h.lat.toFixed(4)+','+h.lng.toFixed(4)) : ''; }
 function railHash(s){ var h = 0; for (var i=0;i<s.length;i++){ h = (Math.imul(h,31) + s.charCodeAt(i))|0; } return h>>>0; }
 /* mix the day INTO each place's hash (avalanche) so a new day genuinely reshuffles the ranks —
@@ -1078,7 +1606,9 @@ function rerenderIdleRail(){
 function idleRailVisible(){ return document.body.dataset.tab === 'spin' && !nearby.active && !draw.active; }
 function railEligible(){                               // loaded crowd-pleasers minus anything since saved
   var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
-  return popRail.recs.filter(function(r){ return !saved[r.placeId]; });
+  /* ring re-checked here too, not just at merge: a cached pool outlives a change to the
+     mid-distance setting, and the jittered batches search past the ring (see withinRing) */
+  return popRail.recs.filter(function(r){ return !saved[r.placeId] && withinRing(r, popRailRadiusM()); });
 }
 function railExhausted(){ return popRail.dry >= 2 || popRail.batch >= 12; }   // Google tapped out (or hard cap)
 function popRailMerge(recs){
@@ -1087,6 +1617,7 @@ function popRailMerge(recs){
   popRail.recs.forEach(function(r){ have[r.placeId] = true; var b = brandKey(r.name); if (b) brands[b] = true; });
   recs.forEach(function(r){
     if (!r.placeId || have[r.placeId] || saved[r.placeId] || isExcludedPlace(r)) return;
+    if (!withinRing(r, popRailRadiusM())) return;                                  // "nearby" has to mean nearby
     if (r.rating == null || r.rating < 4.5 || (r.ratingCount||0) < 300) return;   // crowd-pleaser gate
     var b = brandKey(r.name);
     if (b && brands[b]) return;                          // one location per franchise is enough
@@ -1194,6 +1725,7 @@ function nearbyFilter(recs){
   var prKeys = Object.keys(prices);
   return recs.filter(function(r){
     if (!r.placeId || saved[r.placeId]) return false;
+    if (!withinRing(r, nearbyRadiusM())) return false;                        // honour the chosen distance
     if (isExcludedPlace(r)) return false;
     if (r.rating == null || r.rating < MIN_RATING) return false;              // discovery: no vouch, no slot
     if (mealOn && !openInMealWindow(r, meal)) return false;
@@ -1235,6 +1767,16 @@ function jitterCenter(radiusM, batch){
     latitude:  h.lat + (m * Math.cos(ang)) / 111320,
     longitude: h.lng + (m * Math.sin(ang)) / (111320 * Math.cos(h.lat * Math.PI / 180))
   };
+}
+/* The jittered centre is what keeps batches fresh, but it also pushes the search ring off
+   home: a batch-1 circle reaches 1.5x the chosen radius from home, batch 9 reaches 2x. So
+   a "within 10 km" search would hand back 15-20 km places. Google only bounds the result
+   against the SEARCH centre, so the ring has to be re-checked against home afterwards. */
+function withinRing(r, radiusM){
+  var h = home();
+  if (!h || r.lat == null || r.lng == null) return true;   // no location to judge: never silently drop
+  var km = haversine(h, { lat:r.lat, lng:r.lng });
+  return km == null || km*1000 <= radiusM;
 }
 function nearbyRank(batch){ return batch === 0 ? 'POPULARITY' : 'DISTANCE'; }
 function nearbyCenter(batch){ return jitterCenter(nearbyRadiusM(), batch); }
@@ -1355,7 +1897,7 @@ function buildDiscoveryRec(rec){
     suburb: rec.suburb, address: rec.address, lat: rec.lat, lng: rec.lng, mapsUri: rec.mapsUri,
     phone: rec.phone, website: rec.website, rating: rec.rating, ratingCount: rec.ratingCount,
     photoUri: rec.photoUri, hours: rec.hours, kidFriendly: rec.kidFriendly,
-    by: user || null, addedAt: Date.now(), visitedAt: null, worthRepeat: null, skips: 0, discovered: true
+    by: user || null, addedAt: Date.now(), poolState: 'want', skips: 0, discovered: true
   };
   var td = mineDishes(rec);
   if (td && (td.dishes.length || td.quotes.length || td.summary)){
@@ -1500,19 +2042,22 @@ function renderFinal(host){
 /* ==================== render ==================== */
 function render(){
   if (!state) return;
-  document.getElementById('subtag').textContent = placesArr().filter(function(p){return !p.visitedAt;}).length + ' on the list';
+  document.getElementById('subtag').textContent = placesArr().filter(function(p){return !isBeen(p);}).length + ' on the list';
   renderSpin();
   renderList();
+  /* the other phone can add, remove or visit a place while the map is on screen —
+     don't refit, or the viewport would jump under the user's finger */
+  if (Maps.map) renderMapMarkers(false);
 }
 
 function mealVerb(){ return meal === 'lunch' ? 'lunch' : 'dinner'; }
 
 function anyFilterOn(){
   return dist !== 'any' || Object.keys(cuisines).length > 0 || Object.keys(prices).length > 0
-    || ratingMin > 0 || mealOn || openNow || kidOn;
+    || ratingMin > 0 || mealOn || openNow || kidOn || starOn;
 }
 function clearAllFilters(){
-  mealOn = false; openNow = false; ratingMin = 0; kidOn = false;
+  mealOn = false; openNow = false; ratingMin = 0; kidOn = false; starOn = false;
   dist = 'any';
   cuisines = {}; prices = {};
 }
@@ -1530,6 +2075,7 @@ function renderFilters(){
     + chipHtml('cuisine', cuLbl, cuKeys.length > 0)
     + chipHtml('price', prLbl, prKeys.length > 0)
     + chipHtml('rating', ratingMin > 0 ? ratingMin+'+ &#9733;' : 'Rating', ratingMin > 0)
+    + '<button class="chip'+(starOn?' on':'')+'" data-toggle="star">&#11088; Favourites</button>'
     + chipHtml('more', moreN ? 'More · '+moreN : 'More', moreN > 0)
     + (anyFilterOn() ? '<button class="chip clearchip" id="clearfilters">Clear all &#10005;</button>' : '');
 }
@@ -1575,7 +2121,7 @@ function renderFilterSheet(){
       + fsPill('dist','any','Anywhere', d.dist === 'any') + '</div>';
   } else if (fs.kind === 'cuisine'){
     var counts = {};
-    placesArr().forEach(function(p){ if (!p.visitedAt && !p.blocked && p.cuisine) counts[p.cuisine] = (counts[p.cuisine]||0)+1; });
+    placesArr().forEach(function(p){ if (!isBeen(p) && !p.blocked && p.cuisine) counts[p.cuisine] = (counts[p.cuisine]||0)+1; });
     var keys = Object.keys(counts).sort();
     html = keys.length
       ? '<div class="fs-list">' + keys.map(function(c){
@@ -1652,7 +2198,7 @@ function renderSpin(){
 var HOME_PHOTOS = ['photo1.enc', 'photo2.enc'];
 var photoUrlCache = {};   // enc name -> decrypted blob URL
 function loadHomePhoto(){
-  var name = HOME_PHOTOS[Math.floor(Date.now() / 86400000) % HOME_PHOTOS.length];
+  var name = HOME_PHOTOS[localDay() % HOME_PHOTOS.length];
   var host = document.getElementById('homephoto');
   var code = localStorage.getItem('lt-key');
   if (!host || !code || !window.crypto || !crypto.subtle) return;
@@ -1706,7 +2252,7 @@ function renderRelaxation(host){
      too so an empty or fully-filtered list still gets Google suggestions, not just a dead end. */
   var railHtml = popularRail();
   /* raw pool = visited/blocked only, everything else off */
-  var raw = placesArr().filter(function(p){ return !p.visitedAt && !p.blocked; }).length;
+  var raw = placesArr().filter(function(p){ return !isBeen(p) && !p.blocked; }).length;
   if (raw < 3){
     host.innerHTML = railHtml + '<div class="relax"><p>The list is running dry. Add a couple of places.</p>'
       + '<button class="relaxchip" id="relax-add">Add a place</button>'
@@ -1720,6 +2266,7 @@ function renderRelaxation(host){
   if (openNow) tries.push({ key:'open', label:'Turn off Open now', n:computePool({ignoreOpenNow:true}).length });
   if (ratingMin > 0) tries.push({ key:'rating', label:'Include lower-rated', n:computePool({ignoreRating:true}).length });
   if (kidOn) tries.push({ key:'kid', label:'Include non-kid-friendly', n:computePool({ignoreKid:true}).length });
+  if (starOn) tries.push({ key:'star', label:'Include non-favourites', n:computePool({ignoreStar:true}).length });
   if (dist !== 'any') tries.push({ key:'dist', label:'Search Anywhere', n:computePool({ignoreDistance:true}).length });
   if (Object.keys(cuisines).length) tries.push({ key:'cuisine', label:'Clear cuisines', n:computePool({ignoreCuisine:true}).length });
   if (Object.keys(prices).length) tries.push({ key:'price', label:'Clear price', n:computePool({ignorePrice:true}).length });
@@ -1734,16 +2281,42 @@ function renderRelaxation(host){
   loadPopularRail();
 }
 
+/* Rebuilt only when the option set actually changes (setting home mid-session adds
+   "Nearest"), so the native picker never closes under the user's finger. */
+var sortOptsSig = null;
+function renderSortOptions(){
+  var opts = SORTS.filter(function(s){ return !s.needsHome || home(); });
+  var sig = opts.map(function(s){ return s.key; }).join(',') + '|' + activeSort().key;
+  if (sig === sortOptsSig) return;
+  sortOptsSig = sig;
+  var sel = document.getElementById('listsort');
+  sel.innerHTML = opts.map(function(s){
+    return '<option value="' + s.key + '"' + (s.key === activeSort().key ? ' selected' : '') + '>' + esc(s.label) + '</option>';
+  }).join('');
+}
+
 function renderList(){
   var seg = document.querySelector('#listseg button.on');
   var which = seg ? seg.dataset.seg : 'try';
-  var arr = placesArr().filter(function(p){ return which === 'been' ? !!p.visitedAt : !p.visitedAt; });
-  arr.sort(function(a,b){ return (b.addedAt||0) - (a.addedAt||0); });
+  var arr = placesArr().filter(function(p){ return which === 'been' ? isBeen(p) : !isBeen(p); });
+  var total = arr.length;
+  var q = listQuery.trim().toLowerCase();
+  if (q){
+    arr = arr.filter(function(p){
+      return [p.name, p.cuisine, p.suburb, p.notes, p.address]
+        .some(function(f){ return f && String(f).toLowerCase().indexOf(q) !== -1; });
+    });
+  }
+  arr.sort(activeSort().cmp);
+  renderSortOptions();
   var host = document.getElementById('listcards');
   if (!arr.length){
+    /* "nothing matched" and "nothing here yet" are different problems with different fixes */
     host.innerHTML = '<div class="empty-list">'
-      + (which === 'been' ? 'No visits logged yet. Places you mark as visited land here.'
-                          : 'No places yet. Tap + to add the first one you want to try.') + '</div>';
+      + (q ? 'No matches for &ldquo;' + esc(listQuery.trim()) + '&rdquo;'
+             + (total ? '<br><br>' + total + (total === 1 ? ' place is' : ' places are') + ' in this list.' : '')
+           : (which === 'been' ? 'No visits logged yet. Places you mark as visited land here.'
+                               : 'No places yet. Tap + to add the first one you want to try.')) + '</div>';
     return;
   }
   host.innerHTML = arr.map(function(p){
@@ -1752,12 +2325,21 @@ function renderList(){
     meta1.push('<span class="pricebadge">'+priceLabel(p.priceLevel)+'</span>');
     if (p.suburb) meta1.push(esc(p.suburb));
     if (p.kidFriendly) meta1.push('<span class="kidbadge">kid-ok</span>');
+    if (p.star) meta1.push('<span class="starbadge">&#11088;</span>');
     if (p.blocked) meta1.push('<span class="blockedbadge">ruled out</span>');
     var by = p.by && NAMES[p.by] ? '<span class="byline '+esc(p.by)+'">'+NAMES[p.by]+'</span>' : '';
     var meta2 = [];
     if (by) meta2.push('by '+by);
-    if (which === 'been'){ meta2.push(p.worthRepeat ? 'worth going back' : (p.worthRepeat===false ? 'not again' : 'visited')); }
-    else { var ac = ageCaption(p); if (ac) meta2.push(ac); }
+    var n = visitCount(p);
+    if (which === 'been'){
+      var w = lastWorth(p);
+      meta2.push(w === true ? 'worth going back' : (w === false ? 'not again' : 'visited'));
+      if (n > 1) meta2.push(n + '&times;');
+    } else {
+      /* a revived place keeps its history visible even though it's back in the pool */
+      if (n) meta2.push('been ' + n + (n === 1 ? ' time' : ' times'));
+      var ac = ageCaption(p); if (ac) meta2.push(ac);
+    }
     return '<div class="swipewrap" data-id="'+p.id+'">'
       + '<div class="swipebg">Remove</div>'
       + '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'">'
@@ -1838,7 +2420,7 @@ function spinFinalWheel(){
 function onPlacePicked(ctx){
   if (ctx.src === 'saved'){
     var p = place(ctx.id);
-    if (!p || p.visitedAt){ toast('Plans changed mid-spin'); renderSpin(); return; }   // post-spin revalidate
+    if (!p || isBeen(p)){ toast('Plans changed mid-spin'); renderSpin(); return; }   // post-spin revalidate
   } else {
     var dupe = placesArr().filter(function(sp){ return sp.placeId && sp.placeId === ctx.rec.placeId; })[0];
     if (dupe){ ctx = { src:'saved', id: dupe.id }; }   // the other phone saved it mid-spin
@@ -1939,14 +2521,32 @@ function runOpenCheck(ctx, p){
     var s3 = storedOpenLabel(p); stampOpen(el, s3.cls, s3.text);
   });
 }
+function clockText(h, mm){
+  mm = mm||0;
+  var ap = h<12?'am':'pm', h12 = ((h+11)%12)+1;
+  return h12 + (mm?(':'+String(mm).padStart(2,'0')):'') + ap;
+}
+/* The close time of the period we are INSIDE right now — not the first one that opens
+   today. A venue with separate lunch and dinner sessions used to report the lunch close
+   (already in the past) while it sat open for dinner, and a period running past midnight
+   closes on the NEXT day so it never matched at all. Minutes-since-Sunday-midnight makes
+   both cases plain arithmetic. Returns '' when no period contains now, so the caller
+   simply omits the ", closes X" rather than printing a wrong time. */
 function nextCloseText(coh){
   try {
-    var day = (new Date()).getDay();
-    var per = (coh.periods||[]).filter(function(x){ return x.open && x.open.day === day && x.close; });
-    if (!per.length) return '';
-    var c = per[0].close;
-    var h = c.hour, mm = c.minute||0, ap = h<12?'am':'pm', h12 = ((h+11)%12)+1;
-    return h12 + (mm?(':'+String(mm).padStart(2,'0')):'') + ap;
+    var WEEK = 7*1440, now = new Date();
+    var nowM = now.getDay()*1440 + now.getHours()*60 + now.getMinutes();
+    var per = (coh.periods||[]).filter(function(x){ return x.open && x.close; });
+    for (var i=0;i<per.length;i++){
+      var o = per[i].open, c = per[i].close;
+      var openM  = o.day*1440 + (o.hour||0)*60 + (o.minute||0);
+      var closeM = c.day*1440 + (c.hour||0)*60 + (c.minute||0);
+      if (closeM <= openM) closeM += WEEK;          // crosses midnight, or wraps past Saturday
+      var t = nowM;
+      if (t < openM) t += WEEK;                     // we may be inside a period that opened late last week
+      if (t >= openM && t < closeM) return clockText(c.hour, c.minute);
+    }
+    return '';
   } catch(e){ return ''; }
 }
 
@@ -1975,19 +2575,16 @@ function lockIn(){
 /* mark the current pick as visited (from the result action row) */
 function markVisitedFlow(){
   var ctx = draw.pick; if (!ctx) return;
-  var id, nm;
+  var id;
   if (ctx.src === 'nearby'){
-    nm = ctx.rec.name;
     id = ctx.savedId || uid();
     if (!ctx.savedId){ Store.patch({ ['places/'+id]: buildDiscoveryRec(ctx.rec) }); ctx.savedId = id; }
   } else {
-    id = ctx.id; var pp = place(id);
-    if (!pp){ toast('That place is no longer on the list'); return; }   // other phone removed it
-    nm = pp.name;
+    id = ctx.id;
+    if (!place(id)){ toast('That place is no longer on the list'); return; }   // other phone removed it
   }
-  var worth = confirm('Worth going back? OK = yes, Cancel = no.');
-  Store.patch({ ['places/'+id+'/visitedAt']: Date.now(), ['places/'+id+'/worthRepeat']: worth });
-  toast(nm+' moved to Been');
+  closeOverlay('result-overlay');
+  openVisitSheet(id, null);                    // same sheet as the list, no native confirm
 }
 
 /* ==================== add flow (Places) ==================== */
@@ -2073,8 +2670,7 @@ function saveAdd(manual){
   }
   base.by = user || null;
   base.addedAt = Date.now();
-  base.visitedAt = null;
-  base.worthRepeat = null;
+  base.poolState = 'want';
   base.skips = 0;
   /* strip undefined (Firebase rejects them) */
   Object.keys(base).forEach(function(k){ if (base[k] === undefined) delete base[k]; });
@@ -2085,32 +2681,145 @@ function saveAdd(manual){
 function val(id){ var el = document.getElementById(id); return el ? el.value.trim() : ''; }
 
 /* ==================== list detail ==================== */
+/* Everything below renders from data already stored at add time — no Places call is made
+   to open a place. The only network work in this sheet is the explicit Refresh button. */
+
+var DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function hoursLineHtml(p){
+  var per = p.hours && p.hours.periods;
+  if (!per || !per.length){
+    return '<div class="d-hours"><div class="hline">Hours unknown'
+      + (p.placeId ? ' &mdash; tap Refresh details' : '') + '</div></div>';
+  }
+  var open = openRightNow(p), cls = open ? 'open' : 'shut', label;
+  if (open){
+    var closes = nextCloseText({ periods: per });
+    label = 'Open now' + (closes ? ', closes ' + closes : '');
+  } else {
+    label = 'Closed now' + (nextOpenText(p) || '');
+  }
+  var week = '';
+  var lines = (p.hours && p.hours.text) || [];
+  if (lines.length){
+    var todayIdx = (new Date().getDay() + 6) % 7;          // weekdayDescriptions starts Monday
+    week = '<div class="week">' + lines.map(function(s, i){
+      var m = String(s).split(/:\s(.+)/);                  // "Monday: 9 AM – 5 PM" -> [day, hours]
+      var d = m[0] || s, h = m[1] || '';
+      return '<div class="' + (i === todayIdx ? 'today' : '') + '"><span>' + esc(d) + '</span><span>' + esc(h) + '</span></div>';
+    }).join('') + '</div>';
+  }
+  var stale = '';
+  if (p.hours && p.hours.fetchedAt && (Date.now() - p.hours.fetchedAt) > 90*86400000){
+    var mo = Math.round((Date.now() - p.hours.fetchedAt) / (30*86400000));
+    stale = '<div class="stale">hours last checked about ' + mo + ' months ago</div>';
+  }
+  return '<div class="d-hours" id="d-hoursbox"><div class="hline ' + cls + '" id="d-hourstoggle">'
+    + '<span>' + esc(label) + '</span>' + (week ? '<span class="caret">&#9660;</span>' : '')
+    + '</div>' + week + stale + '</div>';
+}
+/* "Closed now, opens 5pm" / "…, opens Thursday" — searches forward from now, one week max. */
+function nextOpenText(p){
+  var per = (p.hours && p.hours.periods) || [];
+  if (!per.length) return '';
+  var WEEK = 7*1440, now = new Date();
+  var nowM = now.getDay()*1440 + now.getHours()*60 + now.getMinutes();
+  var best = null;
+  per.forEach(function(x){
+    if (!x.open) return;
+    var m = x.open.day*1440 + (x.open.hour||0)*60 + (x.open.minute||0);
+    if (m < nowM) m += WEEK;
+    if (best == null || m < best.m) best = { m:m, o:x.open };
+  });
+  if (!best) return '';
+  var t = clockText(best.o.hour, best.o.minute);
+  var sameDay = (best.m - nowM) < (1440 - (nowM % 1440));
+  return sameDay ? (', opens ' + t) : (', opens ' + DOW[best.o.day] + ' ' + t);
+}
+
+function shortDate(ms){
+  /* `ms || 0` would turn a null/NaN timestamp into the epoch and render "1 Jan 1970" as
+     though it were a real visit. Reject anything non-finite up front instead. */
+  if (ms == null || typeof ms !== 'number' || !isFinite(ms)) return '';
+  var d = new Date(ms);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
+}
+function lastVisitCaption(p){
+  var at = lastVisitAt(p), s = at ? shortDate(at) : '';
+  return s ? ' &middot; last ' + esc(s) : '';
+}
+
+function visitHistoryHtml(p){
+  var vs = visitsArr(p);
+  if (!vs.length) return '<div class="d-novisits">Not visited yet.</div>';
+  return '<div class="d-visits">' + vs.map(function(v){
+    var date = shortDate(v.at) || 'unknown date';
+    var stars = v.rating ? '<span class="vstars">' + '★'.repeat(v.rating) + '</span>' : '';
+    var worth = v.worth == null ? ''
+      : '<span class="vworth' + (v.worth ? '' : ' no') + '">' + (v.worth ? 'worth a return' : 'not again') + '</span>';
+    return '<div class="visitrow">'
+      + '<div class="vtop"><span class="vdate">' + esc(date) + '</span>' + stars + worth
+      +   '<button class="vedit" data-vedit="' + esc(v.vid) + '">edit</button></div>'
+      + (v.notes ? '<div class="vnotes">' + esc(v.notes) + '</div>' : '')
+      + (v.by && NAMES[v.by] ? '<div class="vby">logged by ' + NAMES[v.by] + '</div>' : '')
+      + '</div>';
+  }).join('') + '</div>';
+}
+
 var detailId = null;
 function openDetail(id){
   var p = place(id); if (!p) return;
   detailId = id;
-  var been = !!p.visitedAt;
+  var been = isBeen(p), n = visitCount(p);
   var sheet = document.getElementById('detail-sheet');
+
+  var meta = [];
+  if (p.rating != null) meta.push('<span class="rate">' + p.rating + ' ★</span>' + (p.ratingCount ? ' (' + p.ratingCount + ')' : ''));
+  if (p.priceLevel != null) meta.push(priceLabel(p.priceLevel));
+  if (p.cuisine) meta.push(esc(p.cuisine));
+  if (p.suburb) meta.push(esc(p.suburb));
+  var dm = driveMins(p); if (dm != null) meta.push(dm + ' min drive');
+
+  var acts = '<a class="actbtn" id="d-directions" target="_blank" rel="noopener">Directions</a>';
+  if (p.phone)   acts += '<a class="actbtn call" href="tel:' + esc(p.phone.replace(/\s/g,'')) + '">Call</a>';
+  if (p.website) acts += '<a class="actbtn" style="background:var(--raised-hi); color:var(--ink)" href="' + esc(p.website) + '" target="_blank" rel="noopener">Website</a>';
+
   sheet.innerHTML =
-    photoHtml(p, 'res-photo').replace('class="res-photo"','class="res-photo"')
-    + '<h3>'+esc(p.name)+'</h3>'
-    + '<div class="field" style="text-align:left"><label>Cuisine</label><input class="txtinput" id="d-cuisine" value="'+esc(p.cuisine||'')+'"></div>'
-    + '<div class="kidcheck"><input type="checkbox" id="d-kid" '+(p.kidFriendly?'checked':'')+'>'
-    +   '<div><div class="kc-text">Kid-friendly</div><div class="kc-cap">would we take Avery here?</div></div></div>'
-    + '<div class="field" style="text-align:left"><label>Notes</label><textarea class="txtinput" id="d-notes">'+esc(p.notes||'')+'</textarea></div>'
+      photoHtml(p, 'res-photo')
+    + '<div class="d-head"><h3>' + esc(p.name) + '</h3>'
+    +   '<button class="starbtn' + (p.star ? ' on' : '') + '" id="d-star" '
+    +     'aria-label="' + (p.star ? 'Remove from favourites' : 'Add to favourites') + '">&#11088;</button></div>'
+    + (meta.length ? '<div class="d-meta">' + meta.join('<span class="sep">·</span>') + '</div>' : '')
+    + hoursLineHtml(p)
+    + '<div class="actionrow">' + acts + '</div>'
+    + (p.address ? '<button class="d-addr" id="d-copyaddr">' + esc(p.address) + '</button>' : '')
+
+    + '<div class="d-sec">' + (n ? 'Been ' + n + (n === 1 ? ' time' : ' times') + lastVisitCaption(p) : 'Visits') + '</div>'
+    + visitHistoryHtml(p)
+    + '<div class="sheetbtns" style="margin-top:10px">'
+    +   '<button class="primary" id="d-went">' + (n ? 'Log another visit' : 'We went') + '</button>'
+    +   (been ? '<button class="ghost" id="d-revive">Back in the pool</button>' : '')
+    + '</div>'
+
+    + '<details class="d-edit"><summary>Edit details</summary>'
+    +   '<div class="field"><label>Cuisine</label><input class="txtinput" id="d-cuisine" value="' + esc(p.cuisine||'') + '"></div>'
+    +   '<div class="kidcheck"><input type="checkbox" id="d-kid" ' + (p.kidFriendly?'checked':'') + '>'
+    +     '<div><div class="kc-text">Kid-friendly</div><div class="kc-cap">would we take Avery here?</div></div></div>'
+    +   '<div class="field"><label>Notes</label><textarea class="txtinput" id="d-notes">' + esc(p.notes||'') + '</textarea></div>'
+    +   '<div class="sheetbtns"><button class="primary" id="d-save">Save changes</button></div>'
+    + '</details>'
+
+    + '<div class="d-sec">Manage</div>'
     + '<div class="sheetbtns">'
-    +   '<button class="primary" id="d-save">Save changes</button>'
-    +   (been
-          ? '<button class="ghost" id="d-revive">Back in the pool</button>'
-          : '<button class="ghost" id="d-went">We went</button>')
+    +   (p.placeId ? '<button class="ghost" id="d-refresh">Refresh details from Google</button>' : '')
     +   (p.blocked
           ? '<button class="ghost" id="d-unblock">Back in the rotation</button>'
           : '<button class="danger" id="d-block">Not for us</button>')
-    +   '<button class="ghost" id="d-refresh">Refresh details from Google</button>'
-    +   '<a class="ghost" id="d-directions" target="_blank" rel="noopener" style="text-decoration:none">Directions</a>'
     +   '<button class="danger" id="d-remove">Remove</button>'
     +   '<button class="quiet" id="d-close">Close</button>'
     + '</div>';
+
   var dir = document.getElementById('d-directions');
   dir.href = p.lat != null
     ? 'https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng
@@ -2144,6 +2853,387 @@ function refreshDetail(){
   }).catch(function(){ toast('Refresh failed'); });
 }
 
+/* ==================== log a visit ====================
+   Replaces the old native confirm('Worth going back?'). Nothing here is required: saving
+   with only the pre-filled date is one tap. */
+var visitDraft = { id:null, vid:null, rating:null, worth:null, origAt:null };
+
+function dateInputValue(ms){
+  var d = new Date(ms);
+  if (isNaN(d.getTime())) d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+/* Local NOON, not midnight: a date-only string parsed as UTC midnight lands on the previous
+   day in AEST, which would silently shift every logged visit back one day. */
+function dateInputToMs(s){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if (!m) return Date.now();
+  return new Date(+m[1], +m[2]-1, +m[3], 12, 0, 0, 0).getTime();
+}
+function renderVisitPicks(){
+  Array.prototype.forEach.call(document.querySelectorAll('#v-stars button'), function(b){
+    b.classList.toggle('on', visitDraft.rating != null && +b.dataset.star <= visitDraft.rating);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#v-worth button'), function(b){
+    var want = b.dataset.worth === 'yes';
+    b.classList.toggle('on', visitDraft.worth === want);
+  });
+  document.getElementById('v-clearstars').style.visibility = visitDraft.rating == null ? 'hidden' : '';
+}
+function openVisitSheet(id, vid){
+  var p = place(id); if (!p) return;
+  var existing = vid ? (p.visits && p.visits[vid]) : null;
+  visitDraft = {
+    id: id, vid: vid || null,
+    rating: existing ? (existing.rating || null) : null,
+    worth:  existing ? (existing.worth == null ? null : existing.worth) : null,
+    origAt: existing ? (existing.at || null) : null
+  };
+  document.getElementById('v-title').textContent = existing ? 'Edit visit' : 'Log a visit';
+  document.getElementById('v-sub').textContent = p.name;
+  document.getElementById('v-date').value = dateInputValue(existing ? existing.at : Date.now());
+  document.getElementById('v-notes').value = existing ? (existing.notes || '') : '';
+  document.getElementById('v-delete').style.display = existing ? '' : 'none';
+  renderVisitPicks();
+  document.getElementById('visit-overlay').classList.add('show');
+}
+function saveVisit(){
+  var id = visitDraft.id, p = place(id); if (!p) return;
+  var vid = visitDraft.vid || uid();
+  var dv = document.getElementById('v-date').value;
+  /* an untouched date on an edit keeps the original timestamp, so re-saving a visit to add
+     a note doesn't quietly move it to noon */
+  var at = (visitDraft.origAt && dv === dateInputValue(visitDraft.origAt)) ? visitDraft.origAt : dateInputToMs(dv);
+  var rec = {
+    at: at,
+    rating: visitDraft.rating || null,
+    notes: (document.getElementById('v-notes').value || '').trim() || null,
+    by: (visitDraft.vid && p.visits && p.visits[vid] && p.visits[vid].by) || user || null,
+    worth: visitDraft.worth == null ? null : visitDraft.worth
+  };
+  var editing = !!visitDraft.vid;
+  var patch = {};
+  patch['places/'+id+'/visits/'+vid] = rec;
+  /* Logging a NEW visit is the one thing that moves a place into Been. Editing an existing
+     one deliberately does not touch poolState — a revived place stays revived while you fix
+     a typo in a two-year-old note. */
+  if (!editing) patch['places/'+id+'/poolState'] = 'been';
+  Store.patch(patch);
+  closeOverlay('visit-overlay');
+  toast(editing ? 'Visit updated' : 'Logged — moved to Been');
+  if (document.getElementById('detail-overlay').classList.contains('show')) openDetail(id);
+}
+function deleteVisit(){
+  var id = visitDraft.id, vid = visitDraft.vid, p = place(id);
+  if (!p || !vid) return;
+  var rec = p.visits && p.visits[vid];
+  var remaining = visitsArr(p).filter(function(v){ return v.vid !== vid; }).length;
+  var patch = {};
+  patch['places/'+id+'/visits/'+vid] = null;
+  /* nothing left to have been = the Been label is meaningless, so send it back to the pool.
+     Any other deletion leaves poolState exactly where the user put it. */
+  if (!remaining) patch['places/'+id+'/poolState'] = 'want';
+  Store.patch(patch);
+  closeOverlay('visit-overlay');
+  lastRemovedVisit = { id:id, vid:vid, rec:rec, wasOnly: !remaining };
+  showUndoSnack('Visit deleted');
+  if (document.getElementById('detail-overlay').classList.contains('show')) openDetail(id);
+}
+function toggleStar(id){
+  var p = place(id); if (!p) return;
+  var on = !p.star;
+  Store.patch({ ['places/'+id+'/star']: on ? true : null });
+  var btn = document.getElementById('d-star');
+  if (btn) btn.classList.toggle('on', on);
+  toast(on ? 'Added to favourites' : 'Removed from favourites');
+}
+
+/* ==================== map (phase 4) ====================
+   Google Maps JS is loaded on FIRST OPEN of the Map tab and never on app boot. That is the
+   whole cost story: an eager load bills a map load every time the app opens, including the
+   many opens that only ever spin the wheel. The view itself makes zero Places calls — every
+   pin comes from lat/lng already stored at add time. */
+var MAP_PIN = {
+  want:  { background:'#1DB954', borderColor:'#0E6B31', glyphColor:'#0A0A0A', glyph:null },
+  star:  { background:'#F5A623', borderColor:'#8A5D0B', glyphColor:'#0A0A0A', glyph:'★' },
+  been:  { background:'#6B6B6B', borderColor:'#3C3C3C', glyphColor:'#0A0A0A', glyph:'✓' },
+  home:  { background:'#5C9CE6', borderColor:'#2C5C96', glyphColor:'#0A0A0A', glyph:'⌂' }
+};
+var Maps = { promise:null, map:null, markers:[], showTry:true, showBeen:true, msgBtn:null };
+
+function mapIdReady(){ return !!(window.MAPS_MAP_ID && window.MAPS_MAP_ID !== 'REPLACE_ME_MAP_ID'); }
+
+function mapMsg(html, btnLabel, btnFn){
+  var el = document.getElementById('mapmsg');
+  el.innerHTML = html + (btnLabel ? '<button id="mapretry">' + esc(btnLabel) + '</button>' : '');
+  el.classList.add('show');
+  Maps.msgBtn = btnFn || null;
+}
+function mapMsgClear(){ document.getElementById('mapmsg').classList.remove('show'); Maps.msgBtn = null; }
+
+function loadMaps(){
+  if (Maps.promise) return Maps.promise;
+  Maps.promise = new Promise(function(res, rej){
+    var done = false;
+    window.__luckyMapsReady = function(){ done = true; res(); };
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(placesKey())
+          + '&libraries=marker&loading=async&callback=__luckyMapsReady';
+    s.onerror = function(){ rej(new Error('maps script failed to load')); };
+    document.head.appendChild(s);
+    setTimeout(function(){ if (!done) rej(new Error('maps script timed out')); }, 12000);
+  }).catch(function(e){
+    /* CRITICAL: drop the cached promise so opening the tab again after reconnecting
+       actually retries, instead of re-resolving the original failure forever. */
+    Maps.promise = null;
+    throw e;
+  });
+  return Maps.promise;
+}
+
+function mappablePlaces(){
+  return placesArr().filter(function(p){
+    if (p.lat == null || p.lng == null) return false;
+    return isBeen(p) ? Maps.showBeen : Maps.showTry;
+  });
+}
+
+function clearMarkers(){
+  Maps.markers.forEach(function(m){ m.map = null; });
+  Maps.markers = [];
+}
+
+function renderMapMarkers(fit){
+  if (!Maps.map || !window.google || !google.maps.marker) return;
+  var Adv = google.maps.marker.AdvancedMarkerElement, Pin = google.maps.marker.PinElement;
+  clearMarkers();
+  var pts = mappablePlaces(), bounds = new google.maps.LatLngBounds();
+
+  pts.forEach(function(p){
+    var style = isBeen(p) ? MAP_PIN.been : (p.star ? MAP_PIN.star : MAP_PIN.want);
+    var pin = new Pin({
+      background: style.background, borderColor: style.borderColor,
+      glyphColor: style.glyphColor, glyph: style.glyph, scale: isBeen(p) ? 0.85 : 1
+    });
+    var pos = { lat:p.lat, lng:p.lng };
+    var mk = new Adv({ map: Maps.map, position: pos, title: p.name, content: pin.element });
+    if (isBeen(p)) pin.element.style.opacity = '.72';
+    mk.addListener('gmp-click', function(){ openDetail(p.id); });
+    Maps.markers.push(mk);
+    bounds.extend(pos);
+  });
+
+  var h = home();
+  if (h){
+    var hp = new Pin({ background:MAP_PIN.home.background, borderColor:MAP_PIN.home.borderColor,
+                       glyphColor:MAP_PIN.home.glyphColor, glyph:MAP_PIN.home.glyph, scale:0.9 });
+    var hm = new Adv({ map: Maps.map, position:{ lat:h.lat, lng:h.lng }, title:'Home', content: hp.element });
+    Maps.markers.push(hm);
+    bounds.extend({ lat:h.lat, lng:h.lng });
+  }
+
+  if (!pts.length && !h){
+    mapMsg('Nothing to show yet.<br>Places you add get a pin here once Google gives them coordinates.');
+    return;
+  }
+  mapMsgClear();
+  if (fit && !bounds.isEmpty()){
+    Maps.map.fitBounds(bounds, 48);
+    /* a single pin fits to maximum zoom — pull back to something readable */
+    if (pts.length + (h?1:0) === 1){
+      google.maps.event.addListenerOnce(Maps.map, 'idle', function(){
+        if (Maps.map.getZoom() > 15) Maps.map.setZoom(15);
+      });
+    }
+  }
+}
+
+/* Entry point from the tab bar. Idempotent: builds the map once, then just refits. */
+function openMapTab(){
+  if (!placesKeyReady()){
+    mapMsg('The map needs the Google key.<br>Add it to <code>places-config.js</code>.');
+    return;
+  }
+  if (!mapIdReady()){
+    /* AdvancedMarkerElement silently renders nothing without a map ID, so refuse to draw a
+       map that would look broken — and don't pay for the load either. */
+    mapMsg('The map needs a Map ID.<br>Create one in Google Cloud (Maps &rsaquo; Map management), '
+         + 'then set <code>window.MAPS_MAP_ID</code> in <code>places-config.js</code>.');
+    return;
+  }
+  if (Maps.map){ renderMapMarkers(true); return; }
+
+  mapMsg('Loading the map…');
+  loadMaps().then(function(){
+    var h = home();
+    Maps.map = new google.maps.Map(document.getElementById('map'), {
+      mapId: window.MAPS_MAP_ID,
+      center: h ? { lat:h.lat, lng:h.lng } : { lat:MEL.lat, lng:MEL.lng },
+      zoom: 12,
+      disableDefaultUI: true,
+      zoomControl: true,
+      gestureHandling: 'greedy',
+      clickableIcons: false
+    });
+    renderMapMarkers(true);
+  }).catch(function(){
+    mapMsg('Map needs a connection.', 'Try again', function(){ mapMsgClear(); openMapTab(); });
+  });
+}
+
+/* ==================== settings (phase 4) ==================== */
+function relTime(ms){
+  if (!ms) return 'never';
+  var s = Math.max(0, Math.round((Date.now() - ms)/1000));
+  if (s < 60) return 'just now';
+  var m = Math.round(s/60); if (m < 60) return m + (m===1?' min':' mins') + ' ago';
+  var h = Math.round(m/60); if (h < 24) return h + (h===1?' hour':' hours') + ' ago';
+  var d = Math.round(h/24); return d + (d===1?' day':' days') + ' ago';
+}
+function maskCode(code){
+  if (!code) return '—';
+  return code.length <= 4 ? code : ('•'.repeat(Math.min(8, code.length - 4)) + code.slice(-4));
+}
+function homeLabel(){
+  var h = home();
+  if (!h) return 'Not set';
+  if (h.label) return h.label;
+  /* geolocation gives coordinates and nothing else — say so rather than inventing a suburb */
+  return 'Current location (' + h.lat.toFixed(3) + ', ' + h.lng.toFixed(3) + ')';
+}
+function inviteLink(){
+  var code = tableKey();
+  return code ? (location.origin + location.pathname + '#k=' + code) : '';
+}
+/* navigator.clipboard is unavailable on http and can reject inside an installed iOS PWA,
+   so fall back to a hidden textarea + execCommand, and finally to showing the link. */
+function copyText(text, okMsg){
+  function fallback(){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly','');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      var done = document.execCommand('copy');
+      ta.remove();
+      if (done){ toast(okMsg); return; }
+    } catch(e){}
+    window.prompt('Copy this link:', text);      // last resort: at least make it selectable
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ toast(okMsg); }).catch(fallback);
+  } else fallback();
+}
+var codeRevealed = false;
+
+function settingsRow(k, v, actId, actLabel, cls){
+  return '<div class="setrow' + (cls ? ' ' + cls : '') + '"><div class="sr-body">'
+    + '<div class="sr-k">' + k + '</div><div class="sr-v">' + v + '</div></div>'
+    + (actId ? '<button class="sr-act" id="' + actId + '">' + actLabel + '</button>' : '')
+    + '</div>';
+}
+function renderSettings(){
+  var host = document.getElementById('settings-body');
+  if (!host) return;
+  var h = home(), code = tableKey();
+
+  /* A. home + rings */
+  var html = '<div class="setsec"><h4>Home &amp; distance</h4>'
+    + settingsRow('Home point', esc(homeLabel()), 'set-home', 'Change')
+    + '<div class="kmrow">'
+    +   '<div class="field"><label>Near (km)</label><input type="number" inputmode="decimal" id="set-near" min="0.5" max="100" step="0.5" value="' + nearKm() + '"></div>'
+    +   '<div class="field"><label>Mid (km)</label><input type="number" inputmode="decimal" id="set-mid" min="0.5" max="200" step="0.5" value="' + midKm() + '"></div>'
+    + '</div>'
+    + '<div class="setnote" id="set-kmnote"></div>'
+    + '<div class="sheetbtns"><button class="ghost" id="set-savekm">Save distances</button></div>'
+    + '</div>';
+
+  /* B. identity + table */
+  var members = (state && state.members) || {};
+  var seen = {};
+  Object.keys(members).forEach(function(u){ seen[u] = members[u] && members[u].lastWriteAt; });
+  placesArr().forEach(function(p){ if (p.by && !(p.by in seen)) seen[p.by] = null; });
+  var memberRows = Object.keys(seen).length
+    ? Object.keys(seen).sort().map(function(u){
+        return settingsRow(esc(NAMES[u] || u), seen[u] ? 'last change ' + esc(relTime(seen[u])) : 'has added places');
+      }).join('')
+    : '<div class="setnote">Nobody has written to this table yet.</div>';
+
+  html += '<div class="setsec"><h4>This phone &amp; table</h4>'
+    + settingsRow('This phone is', esc(NAMES[user] || 'Not set'), 'set-who', 'Switch')
+    + settingsRow('Table code', codeRevealed ? esc(code || '—') : esc(maskCode(code)), 'set-reveal', codeRevealed ? 'Hide' : 'Reveal')
+    + settingsRow('Invite link', code ? 'Same list on another phone' : 'No table code yet', code ? 'set-copy' : null, 'Copy')
+    + '<h4 style="margin-top:14px">Who&rsquo;s on this table</h4>'
+    + memberRows
+    + '<div class="setnote">Shows who has <em>written</em> to the table, not who holds the link.</div>'
+    + '</div>';
+
+  /* C. sync + data */
+  var connTxt, connCls = '';
+  if (!window.FIREBASE_CONFIG || !code){ connTxt = '<span class="dot-warn">&#9679;</span> Local only — no table code'; }
+  else if (Sync.blocked){ connTxt = '<span class="dot-bad">&#9679;</span> Blocked — the table code was rejected'; connCls = 'warn'; }
+  else if (Store.mode === 'cloud' && Sync.connected){ connTxt = '<span class="dot-ok">&#9679;</span> Live'; }
+  else { connTxt = '<span class="dot-warn">&#9679;</span> ' + (Sync.retrying ? 'Reconnecting…' : 'Offline'); }
+
+  var pend = pendingRead();
+  var oldest = pend.reduce(function(a, e){ return (a == null || (e.t||0) < a) ? (e.t||0) : a; }, null);
+  var visitsTotal = placesArr().reduce(function(a, p){ return a + visitCount(p); }, 0);
+
+  html += '<div class="setsec"><h4>Sync &amp; data</h4>'
+    + settingsRow('Connection', connTxt, 'set-retry', 'Retry now', connCls)
+    + settingsRow('Waiting to sync', pend.length
+        ? (pend.length + (pend.length === 1 ? ' change' : ' changes') + ', oldest ' + esc(relTime(oldest)))
+        : 'Nothing pending')
+    + settingsRow('Last confirmed by server', esc(relTime(Sync.lastAckAt)))
+    + settingsRow('On this table',
+        placesArr().filter(function(p){ return !isBeen(p); }).length + ' to try &middot; '
+        + placesArr().filter(isBeen).length + ' been &middot; ' + visitsTotal
+        + (visitsTotal === 1 ? ' visit' : ' visits'))
+    + '</div>';
+
+  /* D. Places API */
+  var stats = apiToday(), err = apiLastErr();
+  var kinds = Object.keys(stats.byKind).sort(function(a,b){ return stats.byKind[b] - stats.byKind[a]; });
+  html += '<div class="setsec"><h4>Google Places API</h4>'
+    + settingsRow('Key', placesKeyReady()
+        ? '<span class="dot-ok">&#9679;</span> Present'
+        : '<span class="dot-bad">&#9679;</span> Not set — add it to places-config.js',
+        null, null, placesKeyReady() ? '' : 'warn')
+    + settingsRow('Calls today', stats.total
+        ? stats.total + ' &mdash; ' + kinds.map(function(k){ return esc(k) + ' ' + stats.byKind[k]; }).join(', ')
+        : 'None yet today')
+    + (err ? settingsRow('Last error', esc(err.kind) + ': ' + esc(err.msg) + '<br>' + esc(relTime(err.at)), 'set-clearerr', 'Clear', 'warn') : '')
+    + '<div class="setnote">Counts calls from <em>this phone</em> since midnight. It is not the '
+    + 'Cloud Console quota or your bill &mdash; it is here to catch a runaway loop early.</div>'
+    + '</div>';
+
+  host.innerHTML = html;
+  validateKm();
+}
+/* 0 < near < mid, with a ceiling — an inverted or absurd pair silently empties the pool */
+function validateKm(){
+  var nEl = document.getElementById('set-near'), mEl = document.getElementById('set-mid');
+  var note = document.getElementById('set-kmnote'), btn = document.getElementById('set-savekm');
+  if (!nEl || !mEl || !note || !btn) return null;
+  var n = parseFloat(nEl.value), m = parseFloat(mEl.value), msg = '';
+  if (!isFinite(n) || !isFinite(m) || n <= 0 || m <= 0) msg = 'Both distances need to be a number above zero.';
+  else if (n >= m) msg = 'Near must be smaller than Mid.';
+  else if (m > 200) msg = 'Mid caps at 200 km.';
+  note.className = 'setnote' + (msg ? ' bad' : '');
+  note.innerHTML = msg || ('Near = under ' + n + ' km &middot; Mid = under ' + m + ' km');
+  btn.disabled = !!msg;
+  btn.style.opacity = msg ? .45 : 1;
+  return msg ? null : { near:n, mid:m };
+}
+function openSettings(){
+  codeRevealed = false;
+  renderSettings();
+  document.getElementById('settings-overlay').classList.add('show');
+}
+
 /* ==================== Places key readiness ==================== */
 function placesKeyReady(){
   return !!(window.PLACES_API_KEY && window.PLACES_API_KEY !== 'REPLACE_ME_PLACES_KEY');
@@ -2154,12 +3244,16 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('show');
 
 /* ==================== events ==================== */
 document.querySelector('nav').addEventListener('click', function(ev){
-  var b = ev.target.closest('button[data-tab]'); if (b) document.body.dataset.tab = b.dataset.tab;
+  var b = ev.target.closest('button[data-tab]'); if (!b) return;
+  document.body.dataset.tab = b.dataset.tab;
+  if (b.dataset.tab === 'map') openMapTab();     // first paint is deferred until the tab is actually used
 });
 document.getElementById('fab').addEventListener('click', openAdd);
 
 /* filter chips open their sheet */
 document.getElementById('view-spin').addEventListener('click', function(ev){
+  var tg = ev.target.closest('[data-toggle]');
+  if (tg){ if (tg.dataset.toggle === 'star'){ starOn = !starOn; draw.active = false; renderSpin(); } return; }
   var fc = ev.target.closest('[data-fs]'); if (fc){ openFilterSheet(fc.dataset.fs); return; }
   if (ev.target.closest('#clearfilters')){ clearAllFilters(); draw.active = false; nearby.active = false; renderSpin(); return; }
   if (ev.target.closest('#findbtn')){ findOptions(); return; }
@@ -2191,6 +3285,7 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
     else if (k === 'open') openNow = false;
     else if (k === 'rating') ratingMin = 0;
     else if (k === 'kid') kidOn = false;
+    else if (k === 'star') starOn = false;
     else if (k === 'dist'){ dist = 'any'; }
     else if (k === 'cuisine') cuisines = {};
     else if (k === 'price') prices = {};
@@ -2297,11 +3392,11 @@ var swipedRecently = false;
   host.addEventListener('touchcancel', end);
 })();
 
-/* remove with a 5s undo window */
-var lastRemoved = null, snackTimer = null;
+/* remove with a 5s undo window (whole place, or a single visit record) */
+var lastRemoved = null, lastRemovedVisit = null, snackTimer = null;
 function removePlaceById(id){
   var p = place(id); if (!p) return;
-  lastRemoved = { id:id, data: Object.assign({}, p) };
+  lastRemoved = { id:id, data: Object.assign({}, p) }; lastRemovedVisit = null;
   var patch = {}; patch['places/'+id] = null;
   var lp = state && state.lastPick; if (lp && lp.placeKey === id) patch['lastPick'] = null;
   Store.patch(patch);
@@ -2312,29 +3407,54 @@ function showUndoSnack(msg){
   document.getElementById('snacktext').textContent = msg;
   s.classList.add('show');
   clearTimeout(snackTimer);
-  snackTimer = setTimeout(function(){ s.classList.remove('show'); lastRemoved = null; }, 5000);
+  snackTimer = setTimeout(function(){ s.classList.remove('show'); lastRemoved = null; lastRemovedVisit = null; }, 5000);
 }
 function hideSnack(){ document.getElementById('snackbar').classList.remove('show'); clearTimeout(snackTimer); }
 document.getElementById('snackundo').addEventListener('click', function(){
-  if (!lastRemoved) { hideSnack(); return; }
-  Store.patch({ ['places/'+lastRemoved.id]: lastRemoved.data });
-  lastRemoved = null; hideSnack(); toast('Restored');
+  if (lastRemoved){
+    Store.patch({ ['places/'+lastRemoved.id]: lastRemoved.data });
+    lastRemoved = null; hideSnack(); toast('Restored');
+    return;
+  }
+  if (lastRemovedVisit){
+    var lv = lastRemovedVisit, patch = {};
+    if (place(lv.id) && lv.rec){                    // place still exists on this device's state
+      patch['places/'+lv.id+'/visits/'+lv.vid] = lv.rec;
+      if (lv.wasOnly) patch['places/'+lv.id+'/poolState'] = 'been';   // put back what deleteVisit changed
+      Store.patch(patch);
+      if (document.getElementById('detail-overlay').classList.contains('show')) openDetail(lv.id);
+      toast('Visit restored');
+    } else { toast('That place is gone'); }
+    lastRemovedVisit = null; hideSnack();
+    return;
+  }
+  hideSnack();
 });
 
 /* detail overlay (delegated, sheet is rebuilt each open) */
 document.getElementById('detail-overlay').addEventListener('click', function(ev){
   if (ev.target.id === 'detail-overlay'){ closeOverlay('detail-overlay'); return; }
+  /* the hours line is a div, so it has to be handled before the button/a guard below */
+  if (ev.target.closest('#d-hourstoggle')){
+    var box = document.getElementById('d-hoursbox');
+    if (box) box.classList.toggle('open-week');
+    return;
+  }
   var t = ev.target.closest('button, a'); if (!t) return;
+  if (t.dataset && t.dataset.vedit){ openVisitSheet(detailId, t.dataset.vedit); return; }
   if (t.id === 'd-save') saveDetail();
   else if (t.id === 'd-close') closeOverlay('detail-overlay');
   else if (t.id === 'd-refresh') refreshDetail();
-  else if (t.id === 'd-went'){
-    var worth = confirm('Worth going back? OK = yes, Cancel = no.');
-    Store.patch({ ['places/'+detailId+'/visitedAt']: Date.now(), ['places/'+detailId+'/worthRepeat']: worth });
-    closeOverlay('detail-overlay'); toast('Moved to Been');
+  else if (t.id === 'd-star') toggleStar(detailId);
+  else if (t.id === 'd-copyaddr'){
+    var p0 = place(detailId);
+    if (p0 && p0.address && navigator.clipboard) navigator.clipboard.writeText(p0.address).then(function(){ toast('Address copied'); }).catch(function(){});
   }
+  else if (t.id === 'd-went') openVisitSheet(detailId, null);
   else if (t.id === 'd-revive'){
-    Store.patch({ ['places/'+detailId+'/visitedAt']: null, ['places/'+detailId+'/worthRepeat']: null });
+    /* clears the pool mirror only — the visit log itself survives, so the place keeps its
+       "been 2x" history while sitting back under Want to try */
+    Store.patch({ ['places/'+detailId+'/poolState']: 'want' });
     closeOverlay('detail-overlay'); toast('Back in the pool');
   }
   else if (t.id === 'd-block'){
@@ -2350,6 +3470,91 @@ document.getElementById('detail-overlay').addEventListener('click', function(ev)
     closeOverlay('detail-overlay');
     removePlaceById(rid);                                   // undo snackbar replaces the old confirm dialog
   }
+});
+
+/* map */
+document.getElementById('maptoggles').addEventListener('click', function(ev){
+  var b = ev.target.closest('[data-mtoggle]'); if (!b) return;
+  if (b.dataset.mtoggle === 'try') Maps.showTry = !Maps.showTry;
+  else Maps.showBeen = !Maps.showBeen;
+  b.classList.toggle('on');
+  renderMapMarkers(true);
+});
+document.getElementById('mapmsg').addEventListener('click', function(ev){
+  if (ev.target.id === 'mapretry' && Maps.msgBtn) Maps.msgBtn();
+});
+
+/* settings */
+document.getElementById('gear').addEventListener('click', openSettings);
+document.getElementById('set-close').addEventListener('click', function(){ closeOverlay('settings-overlay'); });
+document.getElementById('settings-overlay').addEventListener('click', function(ev){
+  if (ev.target.id === 'settings-overlay'){ closeOverlay('settings-overlay'); return; }
+  var t = ev.target.closest('button'); if (!t) return;
+  if (t.id === 'set-home'){ closeOverlay('settings-overlay'); openHome(); }
+  else if (t.id === 'set-who'){ document.getElementById('who-overlay').classList.add('show'); }
+  else if (t.id === 'set-reveal'){ codeRevealed = !codeRevealed; renderSettings(); }
+  else if (t.id === 'set-copy'){
+    var link = inviteLink();
+    if (link) copyText(link, 'Invite link copied');
+  }
+  else if (t.id === 'set-retry'){ retryCloudInit().then(renderSettings); toast('Retrying…'); }
+  else if (t.id === 'set-clearerr'){ try { localStorage.removeItem('lt-api-lasterr'); } catch(e){} renderSettings(); }
+  else if (t.id === 'set-savekm'){
+    var v = validateKm(); if (!v) return;
+    Store.patch({ 'settings/nearKm': v.near, 'settings/midKm': v.mid });
+    toast('Distances saved');
+    renderFilters();
+  }
+});
+document.getElementById('settings-overlay').addEventListener('input', function(ev){
+  if (ev.target.id === 'set-near' || ev.target.id === 'set-mid') validateKm();
+});
+
+/* reconnect triggers — boot() cannot cover the case where the Firebase scripts never
+   loaded, so the app has to notice the network itself */
+window.addEventListener('online', function(){ retryCloudInit(); });
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState === 'visible' && (Store.mode !== 'cloud' || pendingCount())) retryCloudInit();
+});
+
+/* places search + sort */
+(function(){
+  var input = document.getElementById('listsearch'), wrap = input.parentNode;
+  input.addEventListener('input', function(){
+    listQuery = input.value;
+    wrap.classList.toggle('filled', !!listQuery);
+    renderList();
+  });
+  document.getElementById('searchclear').addEventListener('click', function(){
+    input.value = ''; listQuery = ''; wrap.classList.remove('filled');
+    renderList(); input.focus();
+  });
+  document.getElementById('listsort').addEventListener('change', function(ev){
+    listSort = ev.target.value;
+    try { localStorage.setItem('lt-sort', listSort); } catch(e){}
+    sortOptsSig = null;                       // selection changed: let the rebuild re-mark it
+    renderList();
+  });
+})();
+
+/* visit overlay */
+document.getElementById('visit-overlay').addEventListener('click', function(ev){
+  if (ev.target.id === 'visit-overlay'){ closeOverlay('visit-overlay'); return; }
+  var t = ev.target.closest('button'); if (!t) return;
+  if (t.dataset.star){
+    var n = +t.dataset.star;
+    visitDraft.rating = (visitDraft.rating === n) ? null : n;   // tapping the current rating clears it
+    renderVisitPicks(); return;
+  }
+  if (t.dataset.worth){
+    var want = t.dataset.worth === 'yes';
+    visitDraft.worth = (visitDraft.worth === want) ? null : want;
+    renderVisitPicks(); return;
+  }
+  if (t.id === 'v-clearstars'){ visitDraft.rating = null; renderVisitPicks(); }
+  else if (t.id === 'v-save') saveVisit();
+  else if (t.id === 'v-delete') deleteVisit();
+  else if (t.id === 'v-cancel') closeOverlay('visit-overlay');
 });
 
 /* add overlay */
@@ -2368,7 +3573,8 @@ document.getElementById('who-overlay').addEventListener('click', function(ev){
   var b = ev.target.closest('button[data-who]'); if (!b) return;
   user = b.dataset.who; localStorage.setItem('lt-user', user);
   closeOverlay('who-overlay');
-  if (!home()) openHome();
+  if (document.getElementById('settings-overlay').classList.contains('show')) renderSettings();
+  else if (!home()) openHome();
   render();
 });
 
@@ -2420,8 +3626,12 @@ function chooseHome(pid){
   document.getElementById('home-suggests').innerHTML = '<div class="suggest"><span class="spinner"></span></div>';
   Places.details(pid, homeFlow.token).then(function(rec){
     if (rec.lat == null){ toast('Couldn\'t place that one — try another'); document.getElementById('home-suggests').innerHTML = ''; return; }
-    Store.patch({ 'settings/home': { lat: +rec.lat.toFixed(5), lng: +rec.lng.toFixed(5) } });
+    /* store the label too: settings can then name the home point without another
+       Places call, and coordinates alone are unreadable in a UI */
+    var label = rec.suburb || rec.name || rec.address || '';
+    Store.patch({ 'settings/home': { lat: +rec.lat.toFixed(5), lng: +rec.lng.toFixed(5), label: label || null } });
     closeOverlay('home-overlay'); toast('Home set');
+    if (document.getElementById('settings-overlay').classList.contains('show')) renderSettings();
   }).catch(function(){ toast('Couldn\'t place that one — try another'); document.getElementById('home-suggests').innerHTML = ''; });
 }
 document.getElementById('home-search').addEventListener('input', onHomeType);
@@ -2432,8 +3642,11 @@ document.getElementById('home-use').addEventListener('click', function(){
   if (!navigator.geolocation){ toast('No location on this device'); return; }
   toast('Getting location…');
   navigator.geolocation.getCurrentPosition(function(pos){
-    Store.patch({ 'settings/home': { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5) } });
+    /* geolocation returns coordinates and nothing else — no label, and homeLabel()
+       renders "Current location (lat, lng)" rather than pretending to know the suburb */
+    Store.patch({ 'settings/home': { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5), label: null } });
     closeOverlay('home-overlay'); toast('Home set');
+    if (document.getElementById('settings-overlay').classList.contains('show')) renderSettings();
   }, function(){ toast('Location blocked — set it later in the ring'); closeOverlay('home-overlay'); });
 });
 document.getElementById('home-skip').addEventListener('click', function(){ closeOverlay('home-overlay'); });
@@ -2456,17 +3669,17 @@ function boot(){
       setTimeout(function(){                         // 4s offline fallback: never hang on a blank screen
         if (settled) return;
         if (!state){ try { state = JSON.parse(localStorage.getItem('lt-state')||'null'); } catch(e){} if (!state) state = seedState(); }
-        var b = document.getElementById('modebanner');
-        b.textContent = 'Offline — showing the last saved list. It reconnects by itself.';
-        b.classList.add('show');
+        syncBanner();
         settle();
       }, 4000);
     });
   } else {
     ready = initLocal();
   }
+  apiPrune();
   ready.then(function(){
     render();
+    syncBanner();
     if (!user) document.getElementById('who-overlay').classList.add('show');
     else if (!home()) openHome();
   });
