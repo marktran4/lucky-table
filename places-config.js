@@ -22,4 +22,4 @@ window.PLACES_API_KEY = "AIzaSyBa61KLqQtsPkzCYdlIcZEZzFzzAMAWYXg";
  * map ID. Until this is filled in the tab shows a short setup message and skips the
  * API load entirely, so an unconfigured map costs nothing.
  */
-window.MAPS_MAP_ID = "REPLACE_ME_MAP_ID";
+window.MAPS_MAP_ID = "7f846bb11030b7ec6a9b6fcb";
