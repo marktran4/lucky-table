@@ -53,6 +53,27 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   by name (Google fills the details). **We went** moves it to Been and out of the
   pool. **Swipe a row right to remove it** (a 5-second Undo snackbar appears);
   the row's detail sheet still has a Remove button too.
+  **Search** and a **sort** control sit above the segments (recently added by
+  default; also longest-on-list, nearest, rating, cuisine, name). Sort order is
+  remembered on the phone; the search box is not, so reopening never shows you a
+  filtered list you forgot about.
+- **Map tab** pins every saved place that has coordinates: green for want-to-try,
+  saffron with a star for favourites, dim grey for Been, blue for home. Tapping a
+  pin opens the same detail sheet as the list. Google Maps loads **only on first
+  open of this tab**, never at app boot, and the view makes zero Places calls.
+- **Settings** (gear, top right) covers the home point and distance rings, who this
+  phone is, the masked table code + copy-invite-link, sync status, and the Places
+  API state. Most of this used to be reachable once at first launch and never again.
+- **A star** marks a favourite. `★ Favourites` on the Dine out filter bar draws only
+  from starred places; it clears with **Clear all** like every other filter, and it
+  never silently weights the odds.
+- **Visits are a log, not a flag.** Each visit records a date, an optional 1-5
+  personal rating, optional notes, and whether it's worth going back. Repeat visits
+  append. Editing or deleting an old visit never moves a place between Want to try
+  and Been — that's decided only by "We went" and "Back in the pool".
+- **Sync is silent when it's fine.** A banner appears only when you're offline, when
+  changes are queued, or when the table code is rejected. It reconnects and re-sends
+  by itself, including when the app was opened with no connection at all.
 
 ---
 
