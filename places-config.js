@@ -13,3 +13,13 @@
  * Paste the key between the quotes, replacing AIzaSyBa61KLqQtsPkzCYdlIcZEZzFzzAMAWYXg.
  */
 window.PLACES_API_KEY = "AIzaSyBa61KLqQtsPkzCYdlIcZEZzFzzAMAWYXg";
+
+/*
+ * Map ID for the Map tab (Google Cloud > Maps > Map management > Create map ID,
+ * type: JavaScript, vector).
+ *
+ * Required: the Map tab uses AdvancedMarkerElement, which renders NOTHING without a
+ * map ID. Until this is filled in the tab shows a short setup message and skips the
+ * API load entirely, so an unconfigured map costs nothing.
+ */
+window.MAPS_MAP_ID = "REPLACE_ME_MAP_ID";
