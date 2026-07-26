@@ -34,7 +34,10 @@ body{
   padding-bottom:calc(88px + env(safe-area-inset-bottom));
   -webkit-font-smoothing:antialiased;
 }
-button{font-family:inherit; border:none; cursor:pointer; color:inherit; background:none}
+/* touch-action:manipulation drops the double-tap-to-zoom wait, so a tap fires immediately
+   instead of feeling laggy. Tap highlight is killed globally (line 28), so every button
+   that can be pressed needs its own :active state or it gives no feedback at all. */
+button{font-family:inherit; border:none; cursor:pointer; color:inherit; background:none; touch-action:manipulation}
 input,textarea,select{font-family:inherit; font-size:16px; color:var(--ink)}
 a{color:inherit; text-decoration:none}
 
@@ -212,7 +215,8 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .pickbar{position:sticky; bottom:calc(96px + env(safe-area-inset-bottom)); margin-top:14px; background:rgba(22,22,22,.96); backdrop-filter:blur(8px); border:1px solid var(--line); border-radius:16px; padding:12px; box-shadow:var(--shadow-lift)}
 .pickcount{text-align:center; font-size:12.5px; font-weight:800; color:var(--muted); margin-bottom:8px}
 .pickquiet{display:flex; justify-content:space-between; margin-top:8px}
-.pickquiet button{color:var(--muted); font-weight:800; font-size:12.5px; padding:6px 2px}
+.pickquiet button{color:var(--ink); opacity:.82; font-weight:800; font-size:13.5px; padding:13px 12px; min-height:44px; border-radius:99px; transition:background .12s ease}
+.pickquiet button:active{opacity:1; background:var(--raised)}
 .ovchip{display:block; width:fit-content; background:var(--saffron); color:#0A0A0A; font-weight:900; font-size:13px; border-radius:99px; padding:6px 12px; margin:0 auto 8px; cursor:pointer}
 .ovchip span{opacity:.7; margin-left:4px}
 .skelrow{height:52px; border-radius:12px; margin:8px 0; background:linear-gradient(90deg,#1C1C1C 25%,#262626 37%,#1C1C1C 63%); background-size:400% 100%; animation:shimmer 1.4s infinite}
@@ -296,13 +300,42 @@ body[data-tab="spin"] nav .t-spin, body[data-tab="list"] nav .t-list, body[data-
   padding:22px 22px calc(26px + env(safe-area-inset-bottom)); text-align:center;
   max-height:92vh; overflow-y:auto;
 }
+/* Pinned close control (the Uber pattern). The bottom Close/Cancel button still works,
+   but on a long sheet — detail, settings — it sits below the fold, so dismissing meant
+   scrolling first. This one stays put at the top of the scroll area, always one tap away.
+   The row is sticky rather than the button so the button can't be clipped by the
+   sheet's own overflow. */
+.sheetxrow{position:sticky; top:0; z-index:6; display:flex; justify-content:flex-end; margin:-10px 0 -6px; pointer-events:none}
+.sheetx{
+  pointer-events:auto;
+  width:44px; height:44px; min-height:44px; flex:0 0 44px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:99px; background:var(--raised-hi); color:var(--ink);
+  font-size:17px; font-weight:900; line-height:1;
+  box-shadow:0 2px 12px rgba(0,0,0,.5);
+  transition:background .12s ease, transform .06s ease;
+}
+.sheetx:active{background:var(--acc); color:#0A0A0A; transform:scale(.92)}
 .sheet h3{margin:0 0 6px; font-size:22px; font-weight:900}
 .sheet p{margin:4px 0 14px; color:var(--muted); font-weight:700; font-size:14px}
 .sheetbtns{display:flex; flex-direction:column; gap:10px; margin-top:8px}
+/* Every sheet button clears the 48px touch target (Apple's floor is 44px; the extra 4px
+   covers a thumb on a moving tram). They also each need an :active state — the global
+   -webkit-tap-highlight-color:transparent means an unstyled press looks like nothing
+   happened, which reads as "the button is broken" rather than "I missed it". */
+.sheetbtns button{min-height:48px; transition:background .12s ease, opacity .12s ease, transform .06s ease}
+.sheetbtns button:active{transform:scale(.985)}
 .sheetbtns .primary{background:var(--acc); color:#0A0A0A; font-weight:900; font-size:16px; border-radius:99px; padding:14px}
+.sheetbtns .primary:active{background:var(--acc-hi, #17A548)}
 .sheetbtns .ghost{background:var(--raised); color:var(--ink); font-weight:900; font-size:15px; border-radius:99px; padding:13px}
+.sheetbtns .ghost:active{background:var(--raised-hi)}
 .sheetbtns .danger{background:var(--tomato-tint); color:var(--tomato); font-weight:900; font-size:15px; border-radius:99px; padding:13px}
-.sheetbtns .quiet{color:var(--muted); font-weight:800; padding:8px}
+.sheetbtns .danger:active{background:var(--tomato); color:#0A0A0A}
+/* Quiet = tertiary (Cancel / Close / back to the list). It stays visually lighter than
+   .ghost so it doesn't compete with the primary action, but it is NOT dimmed into
+   looking disabled: near-white text, a real pill-sized target, and an obvious press. */
+.sheetbtns .quiet{color:var(--ink); opacity:.8; font-weight:800; font-size:15px; border-radius:99px; padding:14px 16px}
+.sheetbtns .quiet:active{opacity:1; background:var(--raised)}
 .whorow{display:flex; gap:12px; margin-top:14px}
 .whorow button{flex:1; border-radius:16px; padding:20px 10px; font-size:17px; font-weight:900}
 .who-mark{background:var(--denim); color:#0A0A0A} .who-jenny{background:var(--acc); color:#0A0A0A}
@@ -675,7 +708,7 @@ textarea.txtinput{min-height:60px; resize:vertical}
         <button data-star="3">&#11088;</button><button data-star="4">&#11088;</button>
         <button data-star="5">&#11088;</button>
       </div>
-      <button class="quiet" id="v-clearstars" style="color:var(--muted); font-weight:800; font-size:12px; display:block; margin:0 auto">clear rating</button>
+      <button class="quiet" id="v-clearstars" style="font-size:13px; display:block; margin:0 auto; min-height:44px; padding:12px 18px">clear rating</button>
     </div>
     <div class="field" style="text-align:left">
       <label>Worth going back?</label>
@@ -2815,8 +2848,12 @@ function openDetail(id){
     +   (p.placeId ? '<button class="ghost" id="d-refresh">Refresh details from Google</button>' : '')
     +   (p.blocked
           ? '<button class="ghost" id="d-unblock">Back in the rotation</button>'
-          : '<button class="danger" id="d-block">Not for us</button>')
-    +   '<button class="danger" id="d-remove">Remove</button>'
+          /* "Not for us" only sets blocked:true — the place stays on the list with a
+             "ruled out" badge and is skipped by suggestions. It is reversible, so it is
+             NOT a danger button; styling it like Remove made the two read as the same
+             action. Remove is the only one that actually deletes. */
+          : '<button class="ghost" id="d-block">Not for us — stop suggesting</button>')
+    +   '<button class="danger" id="d-remove">Remove from list</button>'
     +   '<button class="quiet" id="d-close">Close</button>'
     + '</div>';
 
@@ -3241,6 +3278,55 @@ function placesKeyReady(){
 
 /* ==================== overlays helpers ==================== */
 function closeOverlay(id){ document.getElementById(id).classList.remove('show'); }
+
+/* ---- pinned close button on every dismissable sheet ----
+   The X delegates to each sheet's EXISTING dismiss button rather than calling
+   closeOverlay itself, so per-sheet cleanup (draft discarding, draw-state resets)
+   keeps running exactly as before — one dismissal path, not two that can drift.
+   who-overlay and key-overlay are deliberately absent: identity and table code are
+   required to use the app, so there is nothing sane to dismiss to. */
+var SHEET_X = {
+  'home-overlay':     'home-skip',
+  'add-overlay':      'add-cancel',
+  'result-overlay':   'res-back',
+  'settings-overlay': 'set-close',
+  'visit-overlay':    'v-cancel',
+  'detail-overlay':   'd-close',     /* rendered fresh on each open, so resolved at click time */
+  'filter-overlay':   null           /* no dismiss button of its own; closing == cancel */
+};
+(function installSheetX(){
+  function ensure(ovId){
+    var ov = document.getElementById(ovId); if (!ov) return;
+    var sheet = ov.querySelector('.sheet'); if (!sheet) return;
+    if (sheet.querySelector('.sheetx')) return;          /* idempotent: also stops the
+                                                            observer below re-triggering itself */
+    var row = document.createElement('div');
+    row.className = 'sheetxrow';
+    var b = document.createElement('button');
+    b.className = 'sheetx'; b.type = 'button';
+    b.setAttribute('aria-label', 'Close');
+    b.dataset.sheetx = ovId;
+    b.innerHTML = '&#10005;';
+    row.appendChild(b);
+    sheet.insertBefore(row, sheet.firstChild);
+  }
+  Object.keys(SHEET_X).forEach(function(id){
+    ensure(id);
+    var ov = document.getElementById(id); if (!ov) return;
+    var sheet = ov.querySelector('.sheet'); if (!sheet) return;
+    /* the detail/settings/visit sheets are innerHTML-replaced on each render, which wipes
+       the button — watch and put it back */
+    new MutationObserver(function(){ ensure(id); })
+      .observe(sheet, { childList:true });
+  });
+  document.addEventListener('click', function(ev){
+    var x = ev.target.closest ? ev.target.closest('.sheetx') : null;
+    if (!x) return;
+    var ovId = x.dataset.sheetx, viaId = SHEET_X[ovId];
+    var via = viaId ? document.getElementById(viaId) : null;
+    if (via) via.click(); else closeOverlay(ovId);
+  });
+})();
 
 /* ==================== events ==================== */
 document.querySelector('nav').addEventListener('click', function(ev){
