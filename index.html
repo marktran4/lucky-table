@@ -143,8 +143,6 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 @keyframes sheetup{from{transform:translateY(26px); opacity:.5} to{transform:none; opacity:1}}
 @media (prefers-reduced-motion: reduce){ .overlay.show .sheet{animation:none} }
 .btnsub{display:block; font-size:12px; font-weight:700; opacity:.7; margin-top:2px}
-.homephoto{margin-top:14px}
-.homephoto img{width:100%; height:230px; object-fit:cover; border-radius:16px; display:block}
 
 /* big find button */
 .findbtn{
@@ -2219,44 +2217,10 @@ function renderSpin(){
   } else if (n === 0){
     renderRelaxation(host);
   } else {
-    host.innerHTML = popularRail() + discoveryBtnsHtml() + jennysChoiceBtnHtml()
-      + '<div class="homephoto" id="homephoto" style="display:none"><img id="homephotoimg" alt=""></div>';
-    loadHomePhoto();
+    host.innerHTML = popularRail() + discoveryBtnsHtml() + jennysChoiceBtnHtml();
     loadPopularRail();
   }
 }
-/* Encrypted family photos: AES-256-GCM blobs keyed by SHA-256(table code), so the public
-   repo only carries ciphertext (../encrypt_photos.py makes them). One per day, same on
-   both phones. Missing file / wrong key = the slot just stays hidden. */
-var HOME_PHOTOS = ['photo1.enc', 'photo2.enc'];
-var photoUrlCache = {};   // enc name -> decrypted blob URL
-function loadHomePhoto(){
-  var name = HOME_PHOTOS[localDay() % HOME_PHOTOS.length];
-  var host = document.getElementById('homephoto');
-  var code = localStorage.getItem('lt-key');
-  if (!host || !code || !window.crypto || !crypto.subtle) return;
-  if (photoUrlCache[name]){ showHomePhoto(photoUrlCache[name]); return; }
-  fetch(name).then(function(r){ if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); })
-    .then(function(buf){
-      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(code))
-        .then(function(hash){ return crypto.subtle.importKey('raw', hash, 'AES-GCM', false, ['decrypt']); })
-        .then(function(key){
-          return crypto.subtle.decrypt({ name:'AES-GCM', iv:new Uint8Array(buf.slice(0,12)) }, key, buf.slice(12));
-        });
-    })
-    .then(function(plain){
-      var url = URL.createObjectURL(new Blob([plain], { type:'image/jpeg' }));
-      photoUrlCache[name] = url;
-      showHomePhoto(url);
-    })
-    .catch(function(){});   // no enc file yet, offline, or wrong key: no photo, no error
-}
-function showHomePhoto(url){
-  var host = document.getElementById('homephoto'), img = document.getElementById('homephotoimg');
-  if (!host || !img) return;
-  img.src = url; host.style.display = '';
-}
-
 function renderOptions(host){
   var live = draw.options.map(function(id){ return place(id) ? id : null; }).filter(Boolean);
   if (!live.length){ host.innerHTML = jennysChoiceBtnHtml(); draw.active=false; return; }
