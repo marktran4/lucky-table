@@ -1,5 +1,5 @@
 /* Lucky Table service worker — offline app shell so the list opens without signal */
-var VERSION = 'lt-v18';
+var VERSION = 'lt-v19';
 /* Cache Storage is shared across every app on this origin (marktran4.github.io), so the
    activate sweep must only ever touch OUR caches — deleting by "not the current version"
    would wipe the other PWAs hosted here. */
