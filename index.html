@@ -98,14 +98,14 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
    it reads as an accident. Wide enough that most restaurant names survive un-truncated. */
 .rail{display:flex; gap:11px; overflow-x:auto; margin:0 -18px; padding:0 18px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:none}
 .rail::-webkit-scrollbar{display:none}
-.railcard{flex:0 0 244px; cursor:pointer}
-.railphoto{width:244px; height:164px; border-radius:16px; overflow:hidden; background:var(--raised); position:relative}
+.railcard{flex:0 0 264px; cursor:pointer}
+.railphoto{width:264px; height:178px; border-radius:17px; overflow:hidden; background:var(--raised); position:relative}
 .railphoto img{width:100%; height:100%; object-fit:cover; display:block}
-.railphoto .ph-emoji{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:50px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
-.railname{font-weight:800; font-size:15.5px; margin-top:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.railphoto .ph-emoji{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:54px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
+.railname{font-weight:800; font-size:16px; margin-top:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .railmeta{font-size:12.5px; color:var(--muted); font-weight:700; margin-top:3px}
 .railmorebox{
-  width:244px; height:164px; border-radius:16px; background:var(--raised);
+  width:264px; height:178px; border-radius:17px; background:var(--raised);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
   font-weight:800; font-size:14px;
 }
@@ -183,7 +183,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .overlay.show .sheet{animation:sheetup .28s cubic-bezier(.2,.8,.3,1) both}
 @keyframes sheetup{from{transform:translateY(26px); opacity:.5} to{transform:none; opacity:1}}
 @media (prefers-reduced-motion: reduce){ .overlay.show .sheet{animation:none} }
-.btnsub{display:block; font-size:12.5px; font-weight:700; opacity:.72; margin-top:3px}
+.btnsub{display:block; font-size:12px; font-weight:700; opacity:.72; margin-top:3px}
 
 /* big find button */
 .findbtn{
@@ -196,8 +196,8 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
    directly above it, so it runs larger than the generic .findbtn used inside the funnel —
    and the gap between the two buttons is wider than the gap within either, so they read as
    two separate decisions rather than a pair. */
-.findbtn.homebtn{font-size:22px; padding:21px; margin-top:16px}
-.surprisebtn.homebtn{margin-top:12px; padding:16px}
+.findbtn.homebtn{font-size:19px; padding:17px; margin-top:18px}
+.surprisebtn.homebtn{font-size:15px; padding:14px; margin-top:10px}
 
 /* relaxation chips */
 .relax{margin-top:14px; text-align:center}
