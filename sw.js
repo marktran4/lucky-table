@@ -1,11 +1,9 @@
 /* Lucky Table service worker — offline app shell so the list opens without signal */
-var VERSION = 'lt-v17';
+var VERSION = 'lt-v18';
 /* Cache Storage is shared across every app on this origin (marktran4.github.io), so the
    activate sweep must only ever touch OUR caches — deleting by "not the current version"
    would wipe the other PWAs hosted here. */
 var CACHE_PREFIX = 'lt-';
-/* photo*.enc are cached at runtime by the fetch handler; keeping them out of ASSETS
-   means a missing photo can never brick the install */
 var ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'firebase-config.js', 'places-config.js', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', function (e) {
