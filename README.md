@@ -16,9 +16,12 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 
 - **Dine out tab** is home. Filter chips (Distance / Cuisine / Price / Rating /
   More) open bottom sheets. **No filters are selected by default** (and none
-  carry over a reload), so Jenny's Hit List draws from the whole saved list —
+  carry over a reload), so Jenny's Picks draws from the whole saved list —
   seeded and manually added places alike; a **Clear all** chip appears at the
-  end of the row whenever any filter is active. A
+  end of the row whenever any filter is active. The chips govern **Jenny's Picks
+  only** — Somewhere new takes its constraints from the guided flow instead (see
+  below), so a chip you set for the saved list never silently narrows a Google
+  search. A
   **Most popular nearby** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
   crowd-pleasers near your home point that you haven't saved yet, not places
   already on your list. It **rotates daily**: the day's pool of ~21 is fetched
@@ -28,9 +31,11 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   URLs come from cache), which is cheaper than the old fetch-on-every-open. It
   shows 6 to start; each **Show more** tap reveals 5 more from the day's pool for
   up to 3 taps, then the button retires. It shows even when the saved list is
-  empty. It sits above
-  **Let's OG** (Google discovery of new nearby spots) and **Jenny's Hit List**
-  (draw 3 from the saved list, pool count on the button). Tap a card or
+  empty. It sits above the tab's **two entry points**, in this order:
+  **Jenny's Picks** (draw 3 from the saved list, live pool count on the button)
+  and **Somewhere new** (Google discovery of new nearby spots). Jenny's Picks is
+  the main feature, so it is always the big accent button and always on top —
+  including when no Places key is set and it is the only one shown. Tap a card or
   **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
   Call, or **Show 3 others** once. Mega fast-food franchises (McDonald's, KFC,
   Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`)
@@ -40,13 +45,29 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   words (brand, not suburb); chains whose branches differ earlier — "Brunetti Oro"
   vs "Brunetti Classico", or single-word brands like "Grill'd" — go in
   `DEDUP_BRANDS` to force one result.
-- **Discovery variety (Let's OG + the rail).** Google's `searchNearby` returns at
+- **Somewhere new: the guided flow.** Tapping it does not fire a search. It opens a
+  bottom sheet that asks four questions, one per screen, with a back arrow and a
+  step counter: **How far?** (the distance rings), **What are we feeling?** (cuisines,
+  multi-select, plus a **🎲 Surprise me** that spins the old cuisine roulette and fills
+  the answer in), **What are we spending?** (price levels, multi-select) and
+  **How good does it need to be?** (rating floor). Every step has a **Skip**, and
+  skipping means *no constraint* — never a quiet default. The answers then run the
+  same nearby search as before. They are **session-local**: they never write to the
+  filter chips and never survive a reload.
+  The results list carries the answers on **one tappable line** at the top
+  ("< 5 km · Thai, Viet · $$ · 4.0★+"); tapping a segment reopens the flow at that
+  question. Open now / meal window are not flow questions, so they still come from
+  the chip bar — and they appear on that line too, tinted, so nothing narrows the
+  search invisibly. If a combination returns nothing, the empty state offers to
+  loosen the tightest answer (cuisine first, then rating, price, distance) or to
+  widen the ring, rather than dead-ending.
+- **Discovery variety (Somewhere new + the rail).** Google's `searchNearby` returns at
   most 20 results with no pagination, so a fixed centre + ranking always returns
   the same ~20. To keep surfacing *new* restaurants, each batch is varied: batch 0
   is ranked by POPULARITY at your home point (the best spots), and every later
   batch is ranked by DISTANCE from a search centre that rotates around home and
   expands outward each full rotation. Results accumulate into a growing pool with
-  a "seen" set, so "show a different 15" and repeated Let's OG taps only ever show
+  a "seen" set, so "show a different 15" and repeated Somewhere new searches only show
   places you haven't seen this session (verified live: ~15 all-new per tap). When
   Google is genuinely tapped out it recycles the pool rather than dead-ending.
 - **Places tab** holds the shortlist (Want to try / Been). Tap **+** to add a place
