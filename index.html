@@ -30,7 +30,7 @@ html,body{margin:0; padding:0}
 body{
   font-family:ui-rounded,-apple-system,"SF Pro Rounded","Segoe UI",system-ui,sans-serif;
   background:var(--bg); color:var(--ink);
-  min-height:100vh; min-height:100dvh;
+  min-height:100vh;   /* NOT 100dvh: iOS standalone reports a stale small dvh on cold start and only corrects on rotation */
   padding-bottom:calc(88px + env(safe-area-inset-bottom));
   -webkit-font-smoothing:antialiased;
 }
@@ -111,6 +111,15 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 }
 .railmorebox .arr{width:34px; height:34px; border-radius:50%; background:var(--raised-hi); display:flex; align-items:center; justify-content:center; font-size:16px}
 .railmorebox .cnt{color:var(--muted); font-weight:700; font-size:12px}
+/* skeleton rail while the day's pool loads: holds the heading's ground so "Most popular
+   nearby" can't sit directly on Jenny's Picks and read as its label, and the home surface
+   doesn't reflow when the real cards land */
+.railskel{pointer-events:none}
+.railskel .railname{height:14px; width:70%; border-radius:7px; background:var(--raised)}
+.railskel .railmeta{height:11px; width:45%; border-radius:6px; background:var(--raised); margin-top:7px}
+.railskel .railphoto,.railskel .railname,.railskel .railmeta{animation:skelpulse 1.3s ease-in-out infinite}
+@keyframes skelpulse{0%,100%{opacity:1} 50%{opacity:.55}}
+@media (prefers-reduced-motion: reduce){ .railskel .railphoto,.railskel .railname,.railskel .railmeta{animation:none} }
 
 /* filter chip bar — each chip opens a bottom sheet (Uber Eats pattern) */
 .filterbar{display:flex; gap:9px; margin:12px -18px 4px; padding:0 18px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
@@ -229,7 +238,9 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .optbody .meta{font-size:12px; color:var(--muted); font-weight:700; margin-top:3px; line-height:1.5}
 .optcard .optbody{padding:12px 16px 14px}
 .optcard .optbody .name{font-size:17px}
-.optbody .meta .sep{opacity:.5; margin:0 5px}
+/* every "a · b · c" meta row app-wide: the dot needs air on both sides or the row reads
+   as one squashed token (the list cards shipped that way — Thai·$$·Fitzroy) */
+.sep{opacity:.5; margin:0 5px}
 .pricebadge{font-weight:900; color:var(--basil)}
 .ratebadge{font-weight:800}
 .spindecide{
@@ -1789,7 +1800,13 @@ function loadPopPhotos(){                              // only pay for photos ac
 function popularRail(){
   if (!placesKeyReady() || !home()) return '';        // discovery-only: nothing to suggest without Google + a home point
   var pops = railOrder(railEligible());                // date-seeded daily order; saved places drop off
-  if (!pops.length) return (popRail.loading || popRail.filling) ? '<h2>Most popular nearby <small>finding spots…</small></h2>' : '';
+  if (!pops.length){
+    if (!(popRail.loading || popRail.filling)) return '';
+    var skel = '<div class="railcard railskel"><div class="railphoto"></div>'
+      + '<div class="railname"></div><div class="railmeta"></div></div>';
+    return '<h2>Most popular nearby <small>finding spots…</small></h2>'
+      + '<div class="rail">' + skel + skel + '</div>';
+  }
   var shown = pops.slice(0, railVisibleCount());
   var html = '<h2>Most popular nearby <small>4.5&#9733;+ · 300+ reviews · fresh daily</small></h2><div class="rail">';
   shown.forEach(function(r){
@@ -4019,6 +4036,30 @@ function boot(){
   });
 }
 boot();
+
+/* iOS standalone launch: WebKit first lays out position:fixed elements against a stale,
+   status-bar-short viewport, so the tab bar and FAB paint ~60px above the true bottom and
+   can hang there for seconds before WebKit recomputes. Watch innerHeight over the first
+   moments (plus real resize signals) and, when it changes, force a synchronous reflow of
+   the fixed layer — display flip + offsetHeight read, restored inside the same frame —
+   which snaps the bar to the real bottom immediately instead of waiting WebKit out. */
+(function(){
+  var lastH = 0;
+  function healFixedLayer(){
+    if (window.innerHeight === lastH) return;
+    lastH = window.innerHeight;
+    ['nav', '#fab'].forEach(function(sel){
+      var el = document.querySelector(sel); if (!el) return;
+      var prev = el.style.display;
+      el.style.display = 'none';
+      void el.offsetHeight;
+      el.style.display = prev;
+    });
+  }
+  [120, 350, 800, 1600, 3000].forEach(function(t){ setTimeout(healFixedLayer, t); });
+  window.addEventListener('resize', healFixedLayer);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', healFixedLayer);
+})();
 })();
 </script>
 </body>
