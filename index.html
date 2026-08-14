@@ -675,6 +675,7 @@ textarea.txtinput{min-height:60px; resize:vertical}
       <button class="primary" id="home-use">Use this phone's location</button>
       <button class="quiet" id="home-skip">Skip for now</button>
     </div>
+    <div class="setnote" id="home-note" style="display:none"></div>
   </div>
 </div>
 
@@ -3956,7 +3957,14 @@ function openHome(){
   homeFlow = { token: uid()+uid(), timer:null };
   document.getElementById('home-search').value = '';
   document.getElementById('home-suggests').innerHTML = '';
+  homeNote('');
   document.getElementById('home-overlay').classList.add('show');
+}
+function homeNote(msg, bad){
+  var el = document.getElementById('home-note');
+  el.textContent = msg || '';
+  el.classList.toggle('bad', !!bad);
+  el.style.display = msg ? 'block' : 'none';
 }
 function onHomeType(){
   var q = document.getElementById('home-search').value.trim();
@@ -3990,15 +3998,28 @@ document.getElementById('home-suggests').addEventListener('click', function(ev){
   var s = ev.target.closest('[data-hpid]'); if (s) chooseHome(s.dataset.hpid);
 });
 document.getElementById('home-use').addEventListener('click', function(){
-  if (!navigator.geolocation){ toast('No location on this device'); return; }
-  toast('Getting location…');
+  if (!navigator.geolocation){ homeNote('No location on this device — type your suburb above instead.', true); return; }
+  homeNote('Getting location…');
+  /* explicit timeout: iOS standalone can otherwise leave the call pending forever (no
+     callback at all), which reads as a dead button */
   navigator.geolocation.getCurrentPosition(function(pos){
     /* geolocation returns coordinates and nothing else — no label, and homeLabel()
        renders "Current location (lat, lng)" rather than pretending to know the suburb */
     Store.patch({ 'settings/home': { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5), label: null } });
     closeOverlay('home-overlay'); toast('Home set');
     if (document.getElementById('settings-overlay').classList.contains('show')) renderSettings();
-  }, function(){ toast('Location blocked — set it later in the ring'); closeOverlay('home-overlay'); });
+  }, function(err){
+    /* stay in the sheet: typing a suburb needs no permission and always works. A denial
+       on an iPhone home-screen app is remembered by iOS with no re-prompt — and adding
+       the app to the home screen inherits a Safari-side denial — so the only reset is
+       re-adding the app. Say so instead of a cryptic one-liner. */
+    if (err && err.code === 1){
+      homeNote('iPhone has location blocked for this app. Easiest fix: type your suburb above. '
+        + 'To unblock the button: remove the app from the home screen, add it back from Safari, and tap Allow when asked.', true);
+    } else {
+      homeNote('Couldn’t get a location fix. Try again, or type your suburb above.', true);
+    }
+  }, { enableHighAccuracy:false, timeout:12000, maximumAge:300000 });
 });
 document.getElementById('home-skip').addEventListener('click', function(){ closeOverlay('home-overlay'); });
 
