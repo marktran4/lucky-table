@@ -841,8 +841,8 @@ function isBannedCuisine(cuisine){
 /* mega fast-food franchises kept out of every suggestion (name substring, case-insensitive).
    Easy to extend — just add a lowercase fragment. */
 var BANNED_NAME = ['mcdonald','kfc','hungry jack','burger king','subway','pizza hut','domino',
-  'red rooster','oporto','nando','taco bell','carl\'s jr','carls jr','guzman','zambrero',
-  'starbucks','pizza capers','crust pizza'];
+  'red rooster','oporto','nando','taco bell','carl\'s jr','carls jr','zambrero',
+  'starbucks','pizza capers','crust pizza'];   // 'guzman' unbanned 2026-08-14 — Mark wants GYG suggestible
 function isBannedName(name){
   var n = String(name||'').toLowerCase();
   for (var i=0;i<BANNED_NAME.length;i++){ if (n.indexOf(BANNED_NAME[i]) !== -1) return true; }
@@ -2118,6 +2118,15 @@ function renderBroad(host){
       + '<div class="brtick">' + (sel?'✓':'') + '</div></div>';
   });
   html += '</div>';
+  /* a 1-2 row longlist means the filters are biting hard — offer the loosen path here
+     too, not only on a completely empty result */
+  if (nearby.broad.length < 3){
+    var loosen = relaxOptions()[0];
+    html += '<div class="relax">'
+      + (loosen ? '<button class="relaxchip" data-drelax="' + loosen.key + '">' + loosen.label + '</button>' : '')
+      + (!nearby.wide ? '<button class="relaxchip" id="nearbywiden">Search wider</button>' : '')
+      + '</div>';
+  }
   html += '<div class="pickbar">';
   html += '<div class="pickcount">' + (cnt ? cnt + ' of 3 picked' : 'Pick up to 3, or let it choose') + '</div>';
   if (cnt >= 2) html += '<button class="findbtn" id="npickspin">Spin these ' + cnt + '</button>';
@@ -2127,7 +2136,13 @@ function renderBroad(host){
   host.innerHTML = html;
 }
 function renderFinal(host){
-  var html = '<div class="stagelabel">Your three · tap one, or spin</div><div class="options">';
+  /* the tiny-pool shortcut lands here with 1-2 cards and no longlist behind it, so this
+     stage carries the answer bar too — otherwise a wheel-locked cuisine narrows the
+     search invisibly and one lonely card looks like a bug instead of tight answers */
+  var n = nearby.final.length;
+  var html = answerBarHtml()
+    + '<div class="stagelabel">' + (n >= 3 ? 'Your three · tap one, or spin'
+        : 'Only ' + n + ' fit' + (n === 1 ? 's' : '') + ' those answers') + '</div><div class="options">';
   nearby.final.forEach(function(r){
     var bits = [];
     if (r.cuisine) bits.push(esc(r.cuisine));
@@ -2144,7 +2159,14 @@ function renderFinal(host){
       + '<div class="meta">' + meta2.join('<span class="sep">·</span>') + '</div></div></div></div>';
   });
   html += '</div>';
-  if (nearby.final.length >= 2) html += '<button class="spindecide" id="nspin">Spin the wheel</button>';
+  if (n >= 2) html += '<button class="spindecide" id="nspin">Spin the wheel</button>';
+  if (n < 3){
+    var loosen = relaxOptions()[0];
+    html += '<div class="relax">'
+      + (loosen ? '<button class="relaxchip" data-drelax="' + loosen.key + '">' + loosen.label + '</button>' : '')
+      + (!nearby.wide ? '<button class="relaxchip" id="nearbywiden">Search wider</button>' : '')
+      + '</div>';
+  }
   html += '<button class="findagain" id="nbackbroad">back to the long list</button>';
   host.innerHTML = html;
 }
