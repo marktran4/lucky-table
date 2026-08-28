@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<!-- user-scalable=no removed: blocking pinch-zoom fails WCAG 1.4.4, and iOS has ignored
+     it since 10 anyway, so it only ever cost Android users the ability to zoom. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lucky Table</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -856,8 +858,8 @@ textarea.txtinput{min-height:60px; resize:vertical}
   </div>
 </div>
 
-<div id="toast" aria-hidden="true"></div>
-<div id="snackbar"><span id="snacktext"></span><button id="snackundo">Undo</button></div>
+<div id="toast" role="status" aria-live="polite" aria-hidden="true"></div>
+<div id="snackbar" role="status" aria-live="polite"><span id="snacktext"></span><button id="snackundo">Undo</button></div>
 
 <script>
 (function(){
@@ -874,7 +876,7 @@ var MEMBER_COLORS = ['#5C9CE6', '#1DB954', '#F5A623', '#B07CC6', '#FF5C4D', '#2A
 var LEGACY_COLOR = { mark:0, jenny:1 };        // keeps the two existing bylines exactly as they look today
 var WEDGE = ['#1DB954','#F5A623','#5C9CE6','#FF5C4D','#B07CC6','#2AA198'];
 var RECENT_MS = 14*24*60*60*1000;
-var MEL = { lat:-37.8136, lng:144.9631 };            // autocomplete bias centre
+var MEL = { lat:-37.8136, lng:144.9631 };            // autocomplete bias FALLBACK, pre-home only
 /* Meal windows (minutes from midnight). The dinner end used to be hardcoded at 7pm around
    one family's hard stop; it is settings/dinnerEndMin now, defaulting to the same 7pm. */
 var MEAL_WIN = { lunch:[11*60+30, 14*60], dinner:[17*60, 19*60] };
@@ -975,6 +977,13 @@ function cuisineType(label){
 /* Add-time only, plus one open-check per locked-in pick. Field masks per spec section 5. */
 var PLACES_BASE = 'https://places.googleapis.com/v1';
 function placesKey(){ return window.PLACES_API_KEY; }
+/* Bias autocomplete to where this TABLE actually is, not to Melbourne's CBD. Hardcoding MEL
+   meant a Sydney table typing "The Rocks" got Melbourne suggestions first; it survives only
+   as the fallback for the add flow before a home point exists. */
+function biasCenter(){
+  var h = home();
+  return h ? { latitude:h.lat, longitude:h.lng } : { latitude:MEL.lat, longitude:MEL.lng };
+}
 var Places = {
   autocomplete: function(input, token){
     return fetch(PLACES_BASE+'/places:autocomplete', {
@@ -985,7 +994,7 @@ var Places = {
         /* no primary-type filter: the old restaurant/cafe/bar/bakery whitelist hid delis,
            sandwich/ice-cream shops, food stores etc. You're typing a known place — let it through. */
         includedRegionCodes: ['au'],
-        locationBias: { circle: { center: { latitude:MEL.lat, longitude:MEL.lng }, radius: 30000 } }
+        locationBias: { circle: { center: biasCenter(), radius: 30000 } }
       })
     }).then(chk).then(function(j){
       return (j.suggestions||[]).map(function(s){
@@ -1006,7 +1015,7 @@ var Places = {
       body: JSON.stringify({
         input: input, sessionToken: token,
         includedRegionCodes: ['au'],
-        locationBias: { circle: { center: { latitude:MEL.lat, longitude:MEL.lng }, radius: 50000 } }
+        locationBias: { circle: { center: biasCenter(), radius: 50000 } }
       })
     }).then(chk).then(function(j){
       return (j.suggestions||[]).map(function(s){
@@ -1656,6 +1665,18 @@ function initLocal(){
 }
 
 /* ==================== helpers ==================== */
+/* Anything that reaches an href or src goes through this first. A place's website comes from
+   Google today, but it is stored on the table and editable, so a hostile member could park a
+   `javascript:` URL there and have it fire from someone else's phone. Relative and
+   protocol-relative URLs are fine; a URL that declares a scheme must declare one we allow.
+   Dropped rather than sanitised — a half-cleaned URL is worse than no link. */
+var SAFE_PROTO = /^(https?:|tel:)/i;
+function safeUrl(u){
+  var v = String(u == null ? '' : u).trim();
+  if (!v) return '';
+  if (/^[a-z][a-z0-9+.\-]*:/i.test(v) && !SAFE_PROTO.test(v)) return '';
+  return v;
+}
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
@@ -1760,8 +1781,9 @@ function confetti(big){
 }
 function photoHtml(p, cls){
   var emoji = cuisineEmoji(p.cuisine);
-  if (p.photoUri){
-    return '<div class="'+cls+'"><img src="'+esc(p.photoUri)+'" alt="" '
+  var src = safeUrl(p.photoUri);
+  if (src){
+    return '<div class="'+cls+'"><img src="'+esc(src)+'" alt="" '
       + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
       + '<div class="ph-emoji" style="display:none">'+emoji+'</div></div>';
   }
@@ -2159,7 +2181,11 @@ function popularRail(){
      information is a glance away rather than lost. */
   var html = '<h2>Tonight&rsquo;s crowd-pleasers <small>near you · fresh daily</small></h2><div class="rail">';
   shown.forEach(function(r){
-    html += '<div class="railcard" data-poprail="'+esc(r.placeId)+'">'
+    /* role on the card with a real <button> inside it is knowingly imperfect nesting; the
+       alternative is leaving the card unreachable by keyboard entirely. Flagged for the
+       component pass rather than left silently broken. */
+    html += '<div class="railcard" data-poprail="'+esc(r.placeId)+'" role="button" tabindex="0"'
+      + ' aria-label="'+esc(r.name)+'">'
       + photoHtml(r, 'railphoto').replace(/<\/div>$/,
           '<button class="railsave" data-railsave="'+esc(r.placeId)+'" aria-label="Save '+esc(r.name)+'">+</button></div>')
       + '<div class="railname">'+esc(r.name)+'</div>'
@@ -2486,7 +2512,9 @@ function renderBroad(host){
     var dm = driveMins(r); if (dm != null) meta.push(dm + ' min');
     if (r.rating) meta.push('<span class="ratebadge">★ ' + r.rating + '</span>');
     if (r.kidFriendly) meta.push('<span class="kidbadge">kid-ok</span>');
-    html += '<div class="brow' + (sel?' sel':'') + '" data-bpick="' + esc(r.placeId) + '">'
+    html += '<div class="brow' + (sel?' sel':'') + '" data-bpick="' + esc(r.placeId) + '"'
+      + ' role="checkbox" tabindex="0" aria-checked="' + (sel?'true':'false') + '"'
+      + ' aria-label="' + esc(r.name) + '">'
       + photoHtml(r, 'bphoto')
       + '<div class="brbody"><div class="name">' + esc(r.name) + '</div>'
       + '<div class="meta">' + meta.join('<span class="sep">·</span>') + '</div></div>'
@@ -2527,7 +2555,8 @@ function renderFinal(host){
     if (r.suburb) meta2.push(esc(r.suburb));
     var dm = driveMins(r); if (dm != null) meta2.push(dm + ' min drive');
     if (r.rating) meta2.push('<span class="ratebadge">★ ' + r.rating + (r.ratingCount?' ('+r.ratingCount+')':'') + '</span>');
-    html += '<div class="optcard ncard" data-fopen="' + esc(r.placeId) + '"><div class="ntop">'
+    html += '<div class="optcard ncard" data-fopen="' + esc(r.placeId) + '" role="button" tabindex="0"'
+      + ' aria-label="' + esc(r.name) + '"><div class="ntop">'
       + photoHtml(r, 'photo').replace(/<\/div>$/, '<span class="newbadge">new</span></div>')
       + '<div class="optbody"><div class="name">' + esc(r.name) + '</div>'
       + '<div class="meta">' + bits.join('<span class="sep">·</span>') + '</div>'
@@ -2636,7 +2665,9 @@ function fsPill(key, val, label, on){
   return '<button class="fs-pill'+(on?' on':'')+'" data-fspill="'+key+'" data-fsval="'+val+'">'+label+'</button>';
 }
 function fsToggleRow(key, label, on){
-  return '<div class="fs-row'+(on?' on':'')+'" data-fstoggle="'+key+'"><span>'+label+'</span><span class="fs-tick">'+(on?'&#10003;':'')+'</span></div>';
+  return '<div class="fs-row'+(on?' on':'')+'" data-fstoggle="'+key+'"'
+    + ' role="checkbox" tabindex="0" aria-checked="'+(on?'true':'false')+'">'
+    + '<span>'+label+'</span><span class="fs-tick">'+(on?'&#10003;':'')+'</span></div>';
 }
 function renderFilterSheet(){
   var d = fs.draft, html = '';
@@ -2651,7 +2682,8 @@ function renderFilterSheet(){
     var keys = Object.keys(counts).sort();
     html = keys.length
       ? '<div class="fs-list">' + keys.map(function(c){
-          return '<div class="fs-row'+(d.cuisines[c]?' on':'')+'" data-fsv="'+esc(c)+'">'
+          return '<div class="fs-row'+(d.cuisines[c]?' on':'')+'" data-fsv="'+esc(c)+'"'
+            + ' role="checkbox" tabindex="0" aria-checked="'+(d.cuisines[c]?'true':'false')+'">'
             + '<span>'+esc(c)+' <span class="fs-sub">'+counts[c]+'</span></span>'
             + '<span class="fs-tick">'+(d.cuisines[c]?'&#10003;':'')+'</span></div>';
         }).join('') + '</div>'
@@ -3025,7 +3057,7 @@ function renderOptions(host){
     if (p.cuisine) bits.push(esc(p.cuisine));
     if (p.suburb) bits.push(esc(p.suburb));
     var dm = driveMins(p); if (dm != null) bits.push(dm+' min drive');
-    html += '<div class="optcard" data-opt="'+id+'">'
+    html += '<div class="optcard" data-opt="'+id+'" role="button" tabindex="0" aria-label="'+esc(p.name)+'">'
       + photoHtml(p, 'photo')
       + '<div class="optbody"><div class="name">'+esc(p.name)+'</div>'
       + '<div class="meta">'+bits.join('<span class="sep">·</span>')+'</div></div></div>';
@@ -3140,8 +3172,9 @@ function renderList(){
       var ac = ageCaption(p); if (ac) meta2.push(ac);
     }
     return '<div class="swipewrap" data-id="'+p.id+'">'
-      + '<div class="swipebg">Remove</div>'
-      + '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'">'
+      + '<div class="swipebg" aria-hidden="true">Remove</div>'
+      + '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'"'
+      +   ' role="button" tabindex="0" aria-label="'+esc(p.name)+'">'
       + photoHtml(p, 'photo')
       + '<div class="listbody"><div class="name">'+esc(p.name)+'</div>'
       + '<div class="meta">'+meta1.join('<span class="sep">·</span>')+'</div>'
@@ -3391,7 +3424,7 @@ function lockIn(){
   var dir = document.getElementById('res-directions');
   dir.href = p.lat != null
     ? 'https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+(p.placeId?'&destination_place_id='+encodeURIComponent(p.placeId):'')
-    : (p.mapsUri || 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+(p.suburb||'')));
+    : (safeUrl(p.mapsUri) || 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+(p.suburb||'')));
   var call = document.getElementById('res-call');
   if (p.phone){ call.style.display = ''; call.href = 'tel:'+String(p.phone).replace(/[^+\d]/g,''); }
   else { call.style.display = 'none'; }
@@ -3439,7 +3472,7 @@ function runAutocomplete(q){
     var host = document.getElementById('add-suggests');
     if (!list.length){ host.innerHTML = '<div class="suggest"><div class="s-sub">No matches. Add by name below.</div></div>'; return; }
     host.innerHTML = list.slice(0,6).map(function(s){
-      return '<div class="suggest" data-pid="'+esc(s.placeId)+'"><div class="s-name">'+esc(s.main)+'</div><div class="s-sub">'+esc(s.sub)+'</div></div>';
+      return '<div class="suggest" data-pid="'+esc(s.placeId)+'" role="option" tabindex="0"><div class="s-name">'+esc(s.main)+'</div><div class="s-sub">'+esc(s.sub)+'</div></div>';
     }).join('');
   }).catch(function(){
     document.getElementById('add-suggests').innerHTML = '<div class="suggest"><div class="s-sub">Search failed. Add by name below.</div></div>';
@@ -3467,7 +3500,7 @@ function renderConfirm(rec){
   var c = document.getElementById('add-confirm');
   c.style.display = '';
   c.innerHTML =
-    (rec.photoUri ? '<div class="res-photo"><img src="'+esc(rec.photoUri)+'" alt=""></div>' : '')
+    (safeUrl(rec.photoUri) ? '<div class="res-photo"><img src="'+esc(safeUrl(rec.photoUri))+'" alt=""></div>' : '')
     + '<div class="field"><label>Name</label><input class="txtinput" id="cf-name" value="'+esc(rec.name)+'"></div>'
     + '<div class="field"><label>Cuisine (Google\'s guess, edit it)</label><input class="txtinput" id="cf-cuisine" value="'+esc(rec.cuisine||'')+'"></div>'
     + '<div class="field"><label>Suburb</label><input class="txtinput" id="cf-suburb" value="'+esc(rec.suburb||'')+'"></div>'
@@ -3609,7 +3642,8 @@ function openDetail(id){
 
   var acts = '<a class="actbtn" id="d-directions" target="_blank" rel="noopener">Directions</a>';
   if (p.phone)   acts += '<a class="actbtn call" href="tel:' + esc(p.phone.replace(/\s/g,'')) + '">Call</a>';
-  if (p.website) acts += '<a class="actbtn" style="background:var(--raised-hi); color:var(--ink)" href="' + esc(p.website) + '" target="_blank" rel="noopener">Website</a>';
+  var site = safeUrl(p.website);
+  if (site) acts += '<a class="actbtn" style="background:var(--raised-hi); color:var(--ink)" href="' + esc(site) + '" target="_blank" rel="noopener">Website</a>';
 
   sheet.innerHTML =
       photoHtml(p, 'res-photo')
@@ -3653,7 +3687,7 @@ function openDetail(id){
   var dir = document.getElementById('d-directions');
   dir.href = p.lat != null
     ? 'https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng
-    : (p.mapsUri || 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+(p.suburb||'')));
+    : (safeUrl(p.mapsUri) || 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(p.name+' '+(p.suburb||'')));
   document.getElementById('detail-overlay').classList.add('show');
 }
 function saveDetail(){
@@ -4140,6 +4174,127 @@ var SHEET_X = {
     var ovId = x.dataset.sheetx, viaId = SHEET_X[ovId];
     var via = viaId ? document.getElementById(viaId) : null;
     if (via) via.click(); else closeOverlay(ovId);
+  });
+})();
+
+/* ==================== keyboard, dialogs, and the Back button ====================
+   Everything here is one concern: the app was built for a thumb, and a thumb only. */
+
+/* A div carrying role="button"/"checkbox"/"option" must respond to Enter and Space, or the
+   role is a lie. Space also scrolls the page by default, hence preventDefault. */
+document.addEventListener('keydown', function(ev){
+  if (ev.key !== 'Enter' && ev.key !== ' ' && ev.key !== 'Spacebar') return;
+  var el = ev.target;
+  if (!el || !el.getAttribute) return;
+  var role = el.getAttribute('role');
+  if (role !== 'button' && role !== 'checkbox' && role !== 'option') return;
+  if (/^(BUTTON|A|INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;   // already native
+  ev.preventDefault();
+  el.click();
+});
+
+/* Sheets that a person can dismiss. The onboarding trio is deliberately absent: identity, a
+   table code and a home point are required to use the app, so there is nothing to dismiss to,
+   and giving Back something to close there is exactly what creates a trap. */
+var SHEET_STACK_SKIP = { 'onboard-overlay':1, 'who-overlay':1, 'key-overlay':1 };
+function openSheets(){
+  return Array.prototype.filter.call(document.querySelectorAll('.overlay'), function(ov){
+    return ov.classList.contains('show') && !SHEET_STACK_SKIP[ov.id];
+  });
+}
+/* Dismiss through the sheet's OWN close control so per-sheet cleanup (draft discarding, draw
+   resets) keeps running — one dismissal path, not two that drift. */
+function dismissSheet(id){
+  var viaId = SHEET_X[id];
+  var via = viaId ? document.getElementById(viaId) : null;
+  if (via) via.click(); else closeOverlay(id);
+}
+
+/* ---- ONE history sentinel ----
+   Not one entry per sheet. A sentinel is pushed when the sheet stack goes 0 -> 1 and only
+   then; Back pops it, we close the top sheet, and re-push only if sheets remain. Closing the
+   last sheet by tap consumes our own entry, so the next Back leaves the app rather than
+   replaying a sheet that is already shut. Pushing per sheet, or re-pushing for sheets that
+   cannot be dismissed, is what traps the Back button. */
+var sentinelPushed = false;
+function syncHistorySentinel(){
+  var n = openSheets().length;
+  if (n > 0 && !sentinelPushed){
+    try { history.pushState({ lt:'sheet' }, ''); sentinelPushed = true; } catch(e){}
+  } else if (n === 0 && sentinelPushed){
+    sentinelPushed = false;
+    /* only consume an entry we actually pushed */
+    if (history.state && history.state.lt === 'sheet'){ try { history.back(); } catch(e){} }
+  }
+}
+window.addEventListener('popstate', function(){
+  var sheets = openSheets();
+  sentinelPushed = false;
+  if (!sheets.length) return;                      // nothing of ours to close; let the app be
+  dismissSheet(sheets[sheets.length - 1].id);      // topmost = last in document order
+  if (openSheets().length){
+    try { history.pushState({ lt:'sheet' }, ''); sentinelPushed = true; } catch(e){}
+  }
+});
+
+/* ---- dialog semantics + focus ----
+   Overlays are opened from a dozen places by adding a class, so watch the class rather than
+   funnelling every caller through a new open() — the observer cannot be forgotten.
+   Focus moves to the sheet itself, never its first input: focusing an input pops the phone
+   keyboard over the sheet you just opened. */
+(function installDialogA11y(){
+  var restoreTo = null;
+  function focusables(root){
+    return Array.prototype.filter.call(
+      root.querySelectorAll('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+      function(el){ return el.offsetParent !== null || el === document.activeElement; });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.overlay'), function(ov){
+    var sheet = ov.querySelector('.sheet');
+    if (!sheet) return;
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('tabindex', '-1');
+    new MutationObserver(function(){
+      var shown = ov.classList.contains('show');
+      if (shown && ov.dataset.a11yOpen !== '1'){
+        ov.dataset.a11yOpen = '1';
+        restoreTo = document.activeElement;
+        setTimeout(function(){ try { sheet.focus({ preventScroll:true }); } catch(e){} }, 60);
+      } else if (!shown && ov.dataset.a11yOpen === '1'){
+        ov.dataset.a11yOpen = '0';
+        var back = restoreTo; restoreTo = null;
+        if (back && back.focus && document.contains(back)){
+          try { back.focus({ preventScroll:true }); } catch(e){}
+        }
+      }
+      syncHistorySentinel();
+    }).observe(ov, { attributes:true, attributeFilter:['class'] });
+  });
+  /* aria-modal claims focus cannot leave; make that true rather than a promise to screen
+     readers that the Tab key immediately breaks. */
+  document.addEventListener('keydown', function(ev){
+    if (ev.key !== 'Tab') return;
+    var open = Array.prototype.filter.call(document.querySelectorAll('.overlay'), function(o){
+      return o.classList.contains('show');
+    });
+    if (!open.length) return;
+    var sheet = open[open.length - 1].querySelector('.sheet');
+    if (!sheet) return;
+    var items = focusables(sheet);
+    if (!items.length){ ev.preventDefault(); sheet.focus(); return; }
+    var first = items[0], last = items[items.length - 1];
+    if (!sheet.contains(document.activeElement)){ ev.preventDefault(); first.focus(); return; }
+    if (ev.shiftKey && document.activeElement === first){ ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && document.activeElement === last){ ev.preventDefault(); first.focus(); }
+  });
+  /* Escape closes the top dismissable sheet — the same path Back and the X use. */
+  document.addEventListener('keydown', function(ev){
+    if (ev.key !== 'Escape') return;
+    var sheets = openSheets();
+    if (!sheets.length) return;
+    ev.preventDefault();
+    dismissSheet(sheets[sheets.length - 1].id);
   });
 })();
 
@@ -4633,7 +4788,7 @@ function runHomeAutocomplete(q){
   Places.homeAutocomplete(q, homeFlow.token).then(function(list){
     var host = document.getElementById('home-suggests');
     host.innerHTML = list.slice(0,6).map(function(s){
-      return '<div class="suggest" data-hpid="'+esc(s.placeId)+'"><div class="s-name">'+esc(s.main)+'</div><div class="s-sub">'+esc(s.sub)+'</div></div>';
+      return '<div class="suggest" data-hpid="'+esc(s.placeId)+'" role="option" tabindex="0"><div class="s-name">'+esc(s.main)+'</div><div class="s-sub">'+esc(s.sub)+'</div></div>';
     }).join('');
   }).catch(function(){ document.getElementById('home-suggests').innerHTML = ''; });
 }
@@ -4842,7 +4997,7 @@ document.getElementById('onboard-overlay').addEventListener('input', function(ev
       var host = document.getElementById('ob-homesuggests');
       if (!host) return;
       host.innerHTML = list.slice(0,6).map(function(x){
-        return '<div class="suggest" data-obhpid="'+esc(x.placeId)+'"><div class="s-name">'+esc(x.main)+'</div><div class="s-sub">'+esc(x.sub)+'</div></div>';
+        return '<div class="suggest" data-obhpid="'+esc(x.placeId)+'" role="option" tabindex="0"><div class="s-name">'+esc(x.main)+'</div><div class="s-sub">'+esc(x.sub)+'</div></div>';
       }).join('');
     }).catch(function(){});
   }, 300);
