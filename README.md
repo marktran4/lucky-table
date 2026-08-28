@@ -145,6 +145,19 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   personal rating, optional notes, and whether it's worth going back. Repeat visits
   append. Editing or deleting an old visit never moves a place between Want to try
   and Been — that's decided only by "We went" and "Back in the pool".
+- **Keyboard, screen reader and Back.** Cards, discovery rows and filter rows are rendered as
+  divs but carry real roles, labels and tab stops, and answer Enter/Space; checkbox rows report
+  their state. Sheets are modal dialogs that take focus on open, return it on close, and trap
+  Tab (so `aria-modal` is true rather than a promise). **Escape** closes the top sheet, and so
+  does the **Back button** — via one history sentinel pushed when the first sheet opens, not one
+  entry per sheet, so Back never gets trapped and closing the last sheet by tap gives the entry
+  back. The onboarding sheets are deliberately excluded: they can't be dismissed, so Back there
+  leaves the app, which is correct. Pinch-zoom is no longer blocked.
+- **Somewhere-new and add-a-place search follow the table**, biasing to your home point rather
+  than Melbourne's CBD; MEL is only the fallback before a home point exists.
+- **Anything that reaches an href or src is filtered** (`safeUrl`): a place's website is stored
+  on the table and editable, so a `javascript:` URL parked there would otherwise fire from the
+  other phone. Non-http(s)/tel schemes are dropped, not sanitised.
 - **Sync is silent when it's fine.** A banner appears only when you're offline, when
   changes are queued, or when the table code is rejected. It reconnects and re-sends
   by itself, including when the app was opened with no connection at all.
