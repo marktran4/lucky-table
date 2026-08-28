@@ -77,6 +77,11 @@ header{
 .setnote{font-size:11px; font-weight:700; color:var(--muted); opacity:.85; line-height:1.45; margin:6px 2px 0; text-align:left}
 .setnote.bad{color:var(--tomato); opacity:1}
 .dot-ok{color:var(--acc)} .dot-warn{color:var(--saffron)} .dot-bad{color:var(--tomato)}
+.nschip{
+  display:inline-flex; align-items:center; background:var(--tomato-tint); color:var(--tomato);
+  border-radius:99px; padding:6px 11px; font-weight:800; font-size:12.5px; margin:3px 5px 3px 0;
+}
+.nschip:active{background:var(--tomato); color:#0A0A0A}
 .brand h1{margin:0; font-size:30px; font-weight:900; letter-spacing:-.5px}
 .brand h1 .dot{color:var(--acc)}
 .subtag{font-size:12px; font-weight:700; color:var(--muted)}
@@ -158,6 +163,10 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
    is new. The header row tucks up ALONGSIDE the injected .sheetxrow (negative margin
    cancels its 44px) so back / counter / X read as one row rather than stacking two. */
 #flowsheet .sheetxrow{margin-bottom:-44px}
+/* Onboarding has no X and no scrim dismiss: there is nothing to dismiss TO until the
+   table, the name and the home point exist. Same chrome as the guided flow otherwise. */
+#onboardsheet .sheetxrow{display:none}
+#onboardsheet .flowhead.first .flowback{visibility:hidden}
 .flowhead{display:flex; align-items:center; gap:10px; min-height:44px; padding-right:52px}
 .flowback{
   width:40px; height:40px; min-height:40px; flex:0 0 40px;
@@ -319,8 +328,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .swipebg::before{content:'\2190\00a0\00a0'; font-size:17px}
 .swipewrap .listcard{position:relative; background:var(--bg); transition:transform .2s cubic-bezier(.2,.7,.3,1)}
 .swipewrap.swiping .listcard{transition:none}
-.byline{font-weight:800}
-.byline.mark{color:var(--denim)} .byline.jenny{color:var(--acc)}
+.byline{font-weight:800}   /* colour comes from the member record, inline */
 .empty-list{color:var(--muted); font-weight:700; text-align:center; padding:30px 12px; line-height:1.5}
 
 /* floating add */
@@ -396,9 +404,10 @@ body[data-tab="spin"] nav .t-spin, body[data-tab="list"] nav .t-list, body[data-
    looking disabled: near-white text, a real pill-sized target, and an obvious press. */
 .sheetbtns .quiet{color:var(--ink); opacity:.8; font-weight:800; font-size:15px; border-radius:99px; padding:14px 16px}
 .sheetbtns .quiet:active{opacity:1; background:var(--raised)}
-.whorow{display:flex; gap:12px; margin-top:14px}
-.whorow button{flex:1; border-radius:16px; padding:20px 10px; font-size:17px; font-weight:900}
-.who-mark{background:var(--denim); color:#0A0A0A} .who-jenny{background:var(--acc); color:#0A0A0A}
+.whorow{display:flex; flex-wrap:wrap; gap:12px; margin-top:14px}
+.whorow button{flex:1 1 40%; min-width:120px; min-height:56px; border-radius:16px; padding:18px 10px; font-size:17px; font-weight:900; color:#0A0A0A}
+.whorow button.newmember{background:var(--raised); color:var(--ink); border:1.5px dashed var(--line)}
+.whorow button:active{transform:scale(.985)}
 .keyinput,.txtinput{width:100%; border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--raised); margin-bottom:10px}
 textarea.txtinput{min-height:60px; resize:vertical}
 
@@ -650,15 +659,26 @@ textarea.txtinput{min-height:60px; resize:vertical}
   <button class="t-map" data-tab="map"><span class="ico">&#128506;</span>Map</button>
 </nav>
 
+<!-- first-run onboarding: one sheet, one question per step -->
+<div class="overlay" id="onboard-overlay">
+  <div class="sheet" id="onboardsheet">
+    <div class="flowhead" id="ob-head">
+      <button class="flowback" id="ob-back" aria-label="Back">&#8592;</button>
+      <span class="flowstep" id="ob-step"></span>
+    </div>
+    <div class="flowbar"><i id="ob-progress"></i></div>
+    <h3 id="ob-q"></h3>
+    <p id="ob-sub"></p>
+    <div id="ob-body"></div>
+  </div>
+</div>
+
 <!-- who overlay -->
 <div class="overlay" id="who-overlay">
   <div class="sheet">
-    <h3>Whose phone is this?</h3>
-    <p>Just once, so the app knows who's adding what.</p>
-    <div class="whorow">
-      <button class="who-mark" data-who="mark">Mark</button>
-      <button class="who-jenny" data-who="jenny">Jenny</button>
-    </div>
+    <h3>Who&rsquo;s on this phone?</h3>
+    <p>Just once, so the table knows who&rsquo;s adding what.</p>
+    <div id="who-body"></div>
   </div>
 </div>
 
@@ -816,7 +836,7 @@ textarea.txtinput{min-height:60px; resize:vertical}
   </div>
 </div>
 
-<div id="toast"></div>
+<div id="toast" aria-hidden="true"></div>
 <div id="snackbar"><span id="snacktext"></span><button id="snackundo">Undo</button></div>
 
 <script>
@@ -824,12 +844,26 @@ textarea.txtinput{min-height:60px; resize:vertical}
 'use strict';
 
 /* ==================== constants ==================== */
-var NAMES = { mark:'Mark', jenny:'Jenny' };
+/* Members are DATA now (members/<id>/name), not a constant. This map is the fallback for
+   records written before schema v3 and for a client reading a table it hasn't migrated yet —
+   never a source of truth, and never extended. New members get a name typed in. */
+var LEGACY_NAMES = { mark:'Mark', jenny:'Jenny' };
+/* Byline colours are stored per member (colorIdx) rather than derived from position, so a
+   third person joining can't silently recolour the first two. */
+var MEMBER_COLORS = ['#5C9CE6', '#1DB954', '#F5A623', '#B07CC6', '#FF5C4D', '#2AA198'];
+var LEGACY_COLOR = { mark:0, jenny:1 };        // keeps the two existing bylines exactly as they look today
 var WEDGE = ['#1DB954','#F5A623','#5C9CE6','#FF5C4D','#B07CC6','#2AA198'];
 var RECENT_MS = 14*24*60*60*1000;
 var MEL = { lat:-37.8136, lng:144.9631 };            // autocomplete bias centre
-/* meal windows (minutes from midnight), tuned around the 7pm family hard stop */
+/* Meal windows (minutes from midnight). The dinner end used to be hardcoded at 7pm around
+   one family's hard stop; it is settings/dinnerEndMin now, defaulting to the same 7pm. */
 var MEAL_WIN = { lunch:[11*60+30, 14*60], dinner:[17*60, 19*60] };
+var DINNER_END_DEFAULT = 19*60;
+function mealWindow(m){
+  if (m !== 'dinner') return MEAL_WIN.lunch;
+  var end = settings().dinnerEndMin;
+  return [MEAL_WIN.dinner[0], (typeof end === 'number' && end > MEAL_WIN.dinner[0] && end <= 24*60) ? end : DINNER_END_DEFAULT];
+}
 var DEFAULT_NEAR = 4, DEFAULT_MID = 10;              // km ring thresholds (editable via settings)
 var MIN_RATING = 4.0;                                // hard floor for Google discovery (saved-list floor is ratingMin, user-set)
 var NEARBY_MAX = 15;                                 // rows shown in the broad stage
@@ -839,15 +873,25 @@ var ROULETTE = [
   ['Italian','italian_restaurant'], ['Pizza','pizza_restaurant'], ['Mexican','mexican_restaurant'],
   ['Burgers','hamburger_restaurant'], ['Seafood','seafood_restaurant'], ['Greek','greek_restaurant']
 ];
-/* cuisines excluded from every pool (saved list + Google discovery): substring match, case-insensitive */
-var BANNED_CUISINE = ['indian','pakistani','bangladesh','sri lankan'];
+/* Cuisines this TABLE never wants suggested — substring match, case-insensitive, stored in
+   settings/neverSuggest and editable in Settings. This used to be a hardcoded constant
+   (`BANNED_CUISINE`), which was fine as one household's preference and indefensible the
+   moment a second table existed: an invisible, ethnicity-correlated exclusion applied to
+   everyone. New tables start empty. */
 function isBannedCuisine(cuisine){
   var n = String(cuisine||'').toLowerCase();
-  for (var i=0;i<BANNED_CUISINE.length;i++){ if (n.indexOf(BANNED_CUISINE[i]) !== -1) return true; }
+  if (!n) return false;
+  var list = neverSuggestList();
+  for (var i=0;i<list.length;i++){
+    var t = String(list[i]).toLowerCase().trim();
+    if (t && n.indexOf(t) !== -1) return true;
+  }
   return false;
 }
-/* mega fast-food franchises kept out of every suggestion (name substring, case-insensitive).
-   Easy to extend — just add a lowercase fragment. */
+/* Mega fast-food franchises kept out of every suggestion (name substring, case-insensitive).
+   Deliberately GLOBAL and not per-table, unlike neverSuggest above: "this app doesn't send you
+   to McDonald's" is an editorial stance about what the product is for, not a personal taste.
+   Confirmed as product policy 2026-08-28. Easy to extend — just add a lowercase fragment. */
 var BANNED_NAME = ['mcdonald','kfc','hungry jack','burger king','subway','pizza hut','domino',
   'red rooster','oporto','nando','taco bell','carl\'s jr','carls jr','zambrero',
   'starbucks','pizza capers','crust pizza'];   // 'guzman' unbanned 2026-08-14 — Mark wants GYG suggestible
@@ -1230,6 +1274,45 @@ function localDay(){
 
 /* safe getters (Firebase drops empty nodes) */
 function settings(){ return (state && state.settings) || {}; }
+function membersObj(){ return (state && state.members) || {}; }
+function memberName(id){
+  if (!id) return '';
+  var m = membersObj()[id];
+  if (m && m.name) return m.name;
+  return LEGACY_NAMES[id] || id;              // pre-v3 record, or a client that hasn't synced yet
+}
+function memberColor(id){
+  var m = membersObj()[id];
+  var i = (m && typeof m.colorIdx === 'number') ? m.colorIdx
+        : (LEGACY_COLOR[id] != null ? LEGACY_COLOR[id] : 0);
+  return MEMBER_COLORS[i % MEMBER_COLORS.length];
+}
+/* every id that has touched this table, from the member list and from place authorship */
+function memberIds(){
+  var seen = {};
+  Object.keys(membersObj()).forEach(function(k){ seen[k] = 1; });
+  placesArr().forEach(function(p){ if (p.by) seen[p.by] = 1; });
+  return Object.keys(seen).sort();
+}
+function nextColorIdx(){
+  var used = {};
+  Object.keys(membersObj()).forEach(function(k){
+    var c = membersObj()[k];
+    if (c && typeof c.colorIdx === 'number') used[c.colorIdx] = 1;
+  });
+  for (var i=0;i<MEMBER_COLORS.length;i++){ if (!used[i]) return i; }
+  return Object.keys(membersObj()).length % MEMBER_COLORS.length;
+}
+/* The table's name for its own saved-list draw. Defaults to "Our Picks" — a generic
+   migration cannot know whose table it is reading, so a personal label is NEVER a default;
+   it is renamed once, explicitly, in Settings. */
+function picksLabel(){ return settings().picksLabel || 'Our Picks'; }
+/* Cuisines this table never wants suggested. Empty for every new table by construction:
+   shipping one household's exclusions as the product default would be indefensible. */
+function neverSuggestList(){
+  var o = settings().neverSuggest, c = (o && o.cuisines) || {};
+  return Object.keys(c).filter(function(k){ return c[k]; });
+}
 function home(){ return settings().home || null; }
 function nearKm(){ return settings().nearKm || DEFAULT_NEAR; }
 function midKm(){ return settings().midKm || DEFAULT_MID; }
@@ -1289,7 +1372,7 @@ function isBeen(p){ return poolStateOf(p) === 'been'; }
    CLOUD ONLY. Never runs against a localStorage snapshot: that cache can be arbitrarily
    stale, and replaying a synthetic visit into a place that has since been deleted or revived
    elsewhere would resurrect dead history or create a ghost place under a bare path write. */
-var SCHEMA = 2, LEGACY_VID = 'legacy-v1', schemaChecked = false;
+var SCHEMA = 3, LEGACY_VID = 'legacy-v1', schemaChecked = false;
 function migrateSchema(){
   if (schemaChecked || !state) return;
   if (Store.mode !== 'cloud' || !Store.ref) return;        // offline: leave the data alone, retry next boot
@@ -1318,9 +1401,38 @@ function migrateSchema(){
       back++;
     }
   });
+  /* v3: give every id that has touched this table a real member record. This only
+     NORMALISES identity that is already in the data (member ids and place authorship) —
+     it does not invent preferences. Deliberately absent: neverSuggest and picksLabel.
+     A generic migration cannot know whose table it is reading, so seeding either would
+     ship one household's taste as every table's default. Both are set explicitly in
+     Settings instead. */
+  var named = 0, colorTaken = {};
+  Object.keys(membersObj()).forEach(function(k){
+    var c = membersObj()[k];
+    if (c && typeof c.colorIdx === 'number') colorTaken[c.colorIdx] = 1;
+  });
+  memberIds().forEach(function(id){
+    var m = membersObj()[id] || {};
+    if (!m.name){ patch['members/'+id+'/name'] = LEGACY_NAMES[id] || id; named++; }
+    if (typeof m.colorIdx !== 'number'){
+      var idx = LEGACY_COLOR[id];
+      if (idx == null || colorTaken[idx]){
+        idx = 0;
+        while (colorTaken[idx] && idx < MEMBER_COLORS.length) idx++;
+        idx = idx % MEMBER_COLORS.length;
+      }
+      colorTaken[idx] = 1;
+      patch['members/'+id+'/colorIdx'] = idx;
+    }
+  });
   patch['settings/schema'] = SCHEMA;
+  /* Recorded, not yet enforced: the oldest client version that understands this shape.
+     v3 still writes every field a v2 client reads, so an un-updated phone degrades to
+     "table preferences not applied" rather than breaking. */
+  patch['settings/minClient'] = SCHEMA;
   Store.patch(patch);
-  console.log('[lucky] schema v'+SCHEMA+': stamped '+stamped+' place(s), back-filled '+back+' visit(s)');
+  console.log('[lucky] schema v'+SCHEMA+': stamped '+stamped+' place(s), back-filled '+back+' visit(s), named '+named+' member(s)');
 }
 
 /* ==================== storage layer ==================== */
@@ -1580,7 +1692,7 @@ function isOpenAt(p, day, mins){
   return false;
 }
 function openInMealWindow(p, m){
-  var win = MEAL_WIN[m], day = (new Date()).getDay();
+  var win = mealWindow(m), day = (new Date()).getDay();
   var start = win[0], mid = Math.round((win[0]+win[1])/2), end = win[1]-1;
   return isOpenAt(p, day, start) || isOpenAt(p, day, mid) || isOpenAt(p, day, end);
 }
@@ -1590,12 +1702,22 @@ function openRightNow(p){
 }
 
 var toastTimer = null;
+/* Hiding the toast fades it to opacity 0 but used to leave the text in the DOM forever,
+   where it is invisible to the eye and still perfectly readable to a screen reader — and to
+   anything else inspecting the page, which is how a long-gone "Joining…" was mistaken for a
+   hung network call during a smoke test. Clear the text and hide it from the a11y tree when
+   it goes. (Wave 6 adds the aria-live announcement for when it arrives.) */
 function toast(msg){
   var t = document.getElementById('toast');
   t.textContent = msg;
+  t.removeAttribute('aria-hidden');
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+  toastTimer = setTimeout(function(){
+    t.classList.remove('show');
+    t.textContent = '';
+    t.setAttribute('aria-hidden', 'true');
+  }, 2400);
 }
 function confetti(big){
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -1821,9 +1943,9 @@ function nearbyRadiusM(){
    new asks Google. Jenny's Picks is the main feature, so it is unconditionally the big
    accent button and sits on top — including when there's no Places key and the discovery
    button isn't rendered at all. */
-function jennysPicksBtnHtml(){
+function picksBtnHtml(){
   var n = poolCount();
-  return '<button class="findbtn homebtn" id="findbtn">Jenny’s Picks'
+  return '<button class="findbtn homebtn" id="findbtn">'+esc(picksLabel())
     + '<span class="btnsub">'+n+' place'+(n===1?'':'s')+' in the running</span></button>';
 }
 /* Tapping this opens the guided flow — it never fires a search on tap, so the subtitle
@@ -2777,13 +2899,13 @@ function renderSpin(){
        the primary button it pushed "draw 3 from your list" toward the fold and read as the
        main event, which it isn't. Ordering settles that argument; the CSS below no longer
        has to win it on font size. */
-    host.innerHTML = jennysPicksBtnHtml() + somewhereNewBtnHtml() + popularRail();
+    host.innerHTML = picksBtnHtml() + somewhereNewBtnHtml() + popularRail();
     loadPopularRail();
   }
 }
 function renderOptions(host){
   var live = draw.options.map(function(id){ return place(id) ? id : null; }).filter(Boolean);
-  if (!live.length){ host.innerHTML = jennysPicksBtnHtml(); draw.active=false; return; }
+  if (!live.length){ host.innerHTML = picksBtnHtml(); draw.active=false; return; }
   var html = '<div class="optlabel">Tap one, or let the wheel decide</div><div class="options">';
   live.forEach(function(id){
     var p = place(id);
@@ -2884,7 +3006,8 @@ function renderList(){
     if (p.kidFriendly) meta1.push('<span class="kidbadge">kid-ok</span>');
     if (p.star) meta1.push('<span class="starbadge">&#11088;</span>');
     if (p.blocked) meta1.push('<span class="blockedbadge">ruled out</span>');
-    var by = p.by && NAMES[p.by] ? '<span class="byline '+esc(p.by)+'">'+NAMES[p.by]+'</span>' : '';
+    var byName = memberName(p.by);
+    var by = byName ? '<span class="byline" style="color:'+memberColor(p.by)+'">'+esc(byName)+'</span>' : '';
     var meta2 = [];
     if (by) meta2.push('by '+by);
     var n = visitCount(p);
@@ -3346,7 +3469,7 @@ function visitHistoryHtml(p){
       + '<div class="vtop"><span class="vdate">' + esc(date) + '</span>' + stars + worth
       +   '<button class="vedit" data-vedit="' + esc(v.vid) + '">edit</button></div>'
       + (v.notes ? '<div class="vnotes">' + esc(v.notes) + '</div>' : '')
-      + (v.by && NAMES[v.by] ? '<div class="vby">logged by ' + NAMES[v.by] + '</div>' : '')
+      + (memberName(v.by) ? '<div class="vby">logged by ' + esc(memberName(v.by)) + '</div>' : '')
       + '</div>';
   }).join('') + '</div>';
 }
@@ -3389,7 +3512,7 @@ function openDetail(id){
     + '<details class="d-edit"><summary>Edit details</summary>'
     +   '<div class="field"><label>Cuisine</label><input class="txtinput" id="d-cuisine" value="' + esc(p.cuisine||'') + '"></div>'
     +   '<div class="kidcheck"><input type="checkbox" id="d-kid" ' + (p.kidFriendly?'checked':'') + '>'
-    +     '<div><div class="kc-text">Kid-friendly</div><div class="kc-cap">would we take Avery here?</div></div></div>'
+    +     '<div><div class="kc-text">Kid-friendly</div><div class="kc-cap">somewhere you&rsquo;d take kids</div></div></div>'
     +   '<div class="field"><label>Notes</label><textarea class="txtinput" id="d-notes">' + esc(p.notes||'') + '</textarea></div>'
     +   '<div class="sheetbtns"><button class="primary" id="d-save">Save changes</button></div>'
     + '</details>'
@@ -3746,17 +3869,34 @@ function renderSettings(){
   placesArr().forEach(function(p){ if (p.by && !(p.by in seen)) seen[p.by] = null; });
   var memberRows = Object.keys(seen).length
     ? Object.keys(seen).sort().map(function(u){
-        return settingsRow(esc(NAMES[u] || u), seen[u] ? 'last change ' + esc(relTime(seen[u])) : 'has added places');
+        return settingsRow(esc(memberName(u)), seen[u] ? 'last change ' + esc(relTime(seen[u])) : 'has added places');
       }).join('')
     : '<div class="setnote">Nobody has written to this table yet.</div>';
 
   html += '<div class="setsec"><h4>This phone &amp; table</h4>'
-    + settingsRow('This phone is', esc(NAMES[user] || 'Not set'), 'set-who', 'Switch')
+    + settingsRow('This phone is', esc(memberName(user) || 'Not set'), 'set-who', 'Switch')
+    + settingsRow('Name for your picks', esc(picksLabel()), 'set-label', 'Rename')
     + settingsRow('Table code', codeRevealed ? esc(code || '—') : esc(maskCode(code)), 'set-reveal', codeRevealed ? 'Hide' : 'Reveal')
     + settingsRow('Invite link', code ? 'Same list on another phone' : 'No table code yet', code ? 'set-copy' : null, 'Copy')
     + '<h4 style="margin-top:14px">Who&rsquo;s on this table</h4>'
     + memberRows
     + '<div class="setnote">Shows who has <em>written</em> to the table, not who holds the link.</div>'
+    + '</div>';
+
+  /* B2. suggestions this table never wants */
+  var ns = neverSuggestList();
+  html += '<div class="setsec"><h4>Suggestions</h4>'
+    + '<div class="setrow"><div class="sr-body">'
+    +   '<div class="sr-k">Never suggest</div>'
+    +   '<div class="sr-v">' + (ns.length
+          ? ns.map(function(c){ return '<button class="nschip" data-nsdel="' + esc(c) + '">' + esc(c) + ' &#10005;</button>'; }).join('')
+          : 'Nothing excluded') + '</div>'
+    + '</div></div>'
+    + '<div class="kmrow"><div class="field" style="flex:1">'
+    +   '<input type="text" id="set-nsadd" maxlength="30" placeholder="Cuisine or word to exclude">'
+    + '</div><button class="sr-act" id="set-nsaddbtn" style="padding:0 10px">Add</button></div>'
+    + '<div class="setnote">Matches anywhere in a place&rsquo;s cuisine, so &ldquo;thai&rdquo; also hides &ldquo;Thai-Malaysian&rdquo;. '
+    + 'Applies to your saved list and to Google discovery, on every phone at this table.</div>'
     + '</div>';
 
   /* C. sync + data */
@@ -3823,6 +3963,10 @@ function openSettings(){
 }
 
 /* ==================== Places key readiness ==================== */
+/* Firebase keys cannot contain . $ # [ ] / — a user-typed exclusion has to be made safe
+   before it becomes a path segment. */
+function encodeKey(k){ return String(k).replace(/[.$#\[\]\/]/g, '_'); }
+
 function placesKeyReady(){
   return !!(window.PLACES_API_KEY && window.PLACES_API_KEY !== 'REPLACE_ME_PLACES_KEY');
 }
@@ -4162,7 +4306,30 @@ document.getElementById('settings-overlay').addEventListener('click', function(e
   if (ev.target.id === 'settings-overlay'){ closeOverlay('settings-overlay'); return; }
   var t = ev.target.closest('button'); if (!t) return;
   if (t.id === 'set-home'){ closeOverlay('settings-overlay'); openHome(); }
-  else if (t.id === 'set-who'){ document.getElementById('who-overlay').classList.add('show'); }
+  else if (t.id === 'set-who'){ openWho(); }
+  else if (t.id === 'set-label'){
+    var cur = picksLabel();
+    var next = window.prompt('What should this table call its picks?', cur);
+    if (next == null) return;
+    next = next.trim().slice(0, 28);
+    Store.patch({ 'settings/picksLabel': next || null });
+    renderSettings(); renderSpin();
+    toast(next ? 'Renamed to ' + next : 'Back to Our Picks');
+  }
+  else if (t.id === 'set-nsaddbtn'){
+    var el = document.getElementById('set-nsadd');
+    var v = (el ? el.value : '').trim().toLowerCase().slice(0, 30);
+    if (!v){ if (el) el.focus(); return; }
+    Store.patch({ ['settings/neverSuggest/cuisines/'+encodeKey(v)]: true });
+    if (el) el.value = '';
+    renderSettings(); renderSpin();
+    toast('Won\u2019t suggest ' + v + ' any more');
+  }
+  else if (t.dataset && t.dataset.nsdel){
+    Store.patch({ ['settings/neverSuggest/cuisines/'+encodeKey(t.dataset.nsdel)]: null });
+    renderSettings(); renderSpin();
+    toast('Back in the mix');
+  }
   else if (t.id === 'set-reveal'){ codeRevealed = !codeRevealed; renderSettings(); }
   else if (t.id === 'set-copy'){
     var link = inviteLink();
@@ -4239,14 +4406,60 @@ document.getElementById('add-manual').addEventListener('click', function(){
 });
 document.getElementById('add-cancel').addEventListener('click', function(){ closeOverlay('add-overlay'); });
 
-/* who overlay */
-document.getElementById('who-overlay').addEventListener('click', function(ev){
-  var b = ev.target.closest('button[data-who]'); if (!b) return;
-  user = b.dataset.who; lsSet('lt-user', user);
+/* who overlay — the member list is data, so it is rendered rather than hardcoded */
+var whoAdding = false;
+function renderWho(){
+  var host = document.getElementById('who-body');
+  if (!host) return;
+  var ids = memberIds();
+  var html = '';
+  if (ids.length){
+    html += '<div class="whorow">' + ids.map(function(id){
+      return '<button data-who="' + esc(id) + '" style="background:' + memberColor(id) + '">'
+        + esc(memberName(id)) + '</button>';
+    }).join('') + '</div>';
+  }
+  if (whoAdding || !ids.length){
+    html += '<div class="field" style="margin-top:14px; text-align:left">'
+      +   '<label style="display:block; font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px">Your name</label>'
+      +   '<input class="txtinput" id="who-name" maxlength="24" placeholder="e.g. Sam" autocomplete="given-name">'
+      + '</div>'
+      + '<div class="sheetbtns"><button class="primary" id="who-save">That&rsquo;s me</button></div>';
+  } else {
+    html += '<div class="whorow" style="margin-top:12px">'
+      +   '<button class="newmember" id="who-new">Someone else</button></div>';
+  }
+  host.innerHTML = html;
+  if (whoAdding || !ids.length){
+    var el = document.getElementById('who-name');
+    if (el) setTimeout(function(){ el.focus(); }, 120);
+  }
+}
+function openWho(){ whoAdding = false; renderWho(); document.getElementById('who-overlay').classList.add('show'); }
+/* A new member id is random, not derived from the name: two people called Sam on one table
+   must not become the same member, and renaming yourself must not rewrite your history. */
+function setUserTo(id){
+  user = id;
+  lsSet('lt-user', user);
   closeOverlay('who-overlay');
   if (document.getElementById('settings-overlay').classList.contains('show')) renderSettings();
-  else if (!home()) openHome();
   render();
+}
+document.getElementById('who-overlay').addEventListener('click', function(ev){
+  if (ev.target.closest('#who-new')){ whoAdding = true; renderWho(); return; }
+  if (ev.target.closest('#who-save')){
+    var nm = (document.getElementById('who-name') || {}).value || '';
+    nm = nm.trim().slice(0, 24);
+    if (!nm){ var el = document.getElementById('who-name'); if (el) el.focus(); return; }
+    var id = 'm' + uid();
+    Store.patch({ ['members/'+id+'/name']: nm, ['members/'+id+'/colorIdx']: nextColorIdx() });
+    setUserTo(id);
+    if (onboard.active) onboardNext(); else if (!home()) openHome();
+    return;
+  }
+  var b = ev.target.closest('button[data-who]'); if (!b) return;
+  setUserTo(b.dataset.who);
+  if (onboard.active) onboardNext(); else if (!home()) openHome();
 });
 
 /* key overlay */
@@ -4344,36 +4557,209 @@ document.getElementById('home-skip').addEventListener('click', function(){ close
 
 document.addEventListener('visibilitychange', function(){ if (!document.hidden){ meal = clockMeal(); render(); } });
 
+/* ==================== first-run onboarding ====================
+   Three gates used to be three separate sheets, two of which only appeared after a full page
+   reload: paste a code -> reload -> whose phone -> where's home. One sheet now walks them,
+   showing only the steps that are actually missing, and the code step connects in place
+   rather than reloading.
+
+   The home step is REQUIRED here (no "Skip for now"): discovery and the crowd-pleasers rail
+   both need a home point, so skipping it during onboarding strands a brand-new table on an
+   empty screen. Skip stays available when the same sheet is opened later from Settings —
+   by then there is a list to fall back on. Adding a place by name never needs either. */
+var onboard = { steps:[], i:0, active:false };
+function onboardNeeded(){
+  var need = [];
+  if (window.FIREBASE_CONFIG && !tableKey()) need.push('code');
+  if (!user) need.push('name');
+  if (!home()) need.push('home');
+  return need;
+}
+function startOnboard(){
+  onboard.steps = onboardNeeded();
+  if (!onboard.steps.length){ onboard.active = false; closeOverlay('onboard-overlay'); return; }
+  onboard.i = 0;
+  onboard.active = true;
+  renderOnboard();
+  document.getElementById('onboard-overlay').classList.add('show');
+}
+function onboardStepDone(step){
+  if (step === 'code') return !(window.FIREBASE_CONFIG && !tableKey());
+  if (step === 'name') return !!user;
+  if (step === 'home') return !!home();
+  return true;
+}
+/* Advance past every step that is now satisfied, and close when nothing is left.
+
+   The step LIST is fixed when onboarding starts and never recomputed mid-flow. Recomputing
+   it looked equivalent and wasn't: answering step 1 of 3 dropped it from the list and reset
+   the index, so the counter went "1 of 3" -> "1 of 2" and the back arrow vanished — progress
+   appearing to go backwards while actually moving forwards. The total the user was shown at
+   the start is a promise; keep it. */
+function onboardNext(){
+  if (!onboard.active) return;
+  while (onboard.i < onboard.steps.length && onboardStepDone(onboard.steps[onboard.i])) onboard.i++;
+  if (onboard.i >= onboard.steps.length){
+    /* a gate can still be open if something was answered out of band — start a fresh pass
+       rather than closing onto a half-set-up app */
+    if (onboardNeeded().length){ startOnboard(); return; }
+    onboard.active = false;
+    closeOverlay('onboard-overlay');
+    render();
+    return;
+  }
+  renderOnboard();
+  document.getElementById('onboard-overlay').classList.add('show');
+}
+var OB_COPY = {
+  code: { q:'Join your table',      sub:'Open the invite link you were sent, or paste it here. The code is what keeps your list private.' },
+  name: { q:'Who\u2019s on this phone?', sub:'So the table knows who added what.' },
+  home: { q:'Where\u2019s home?',       sub:'Used to work out how far each place is. Only the two numbers are stored.' }
+};
+function renderOnboard(){
+  var step = onboard.steps[onboard.i];
+  if (!step) return;
+  var total = onboard.steps.length;
+  document.getElementById('ob-head').className = 'flowhead' + (onboard.i === 0 ? ' first' : '');
+  document.getElementById('ob-step').textContent = (onboard.i + 1) + ' of ' + total;
+  document.getElementById('ob-progress').style.width = Math.round((onboard.i + 1) / total * 100) + '%';
+  document.getElementById('ob-q').textContent = OB_COPY[step].q;
+  document.getElementById('ob-sub').textContent = OB_COPY[step].sub;
+  var html = '';
+  if (step === 'code'){
+    html = '<input class="keyinput" type="text" id="ob-code" placeholder="Paste link or code" autocomplete="off" autocapitalize="none" spellcheck="false">'
+         + '<div class="sheetbtns"><button class="primary" id="ob-codesave">Let&rsquo;s go</button></div>';
+  } else if (step === 'name'){
+    var ids = memberIds();
+    if (ids.length){
+      html += '<div class="whorow">' + ids.map(function(id){
+        return '<button data-obwho="' + esc(id) + '" style="background:' + memberColor(id) + '">' + esc(memberName(id)) + '</button>';
+      }).join('') + '</div><div class="fs-orlabel">or add yourself</div>';
+    }
+    html += '<input class="txtinput" type="text" id="ob-name" maxlength="24" placeholder="Your name">'
+         +  '<div class="sheetbtns"><button class="primary" id="ob-namesave">That&rsquo;s me</button></div>';
+  } else {
+    html = '<input class="txtinput" type="text" id="ob-home" placeholder="Type your suburb or street" autocomplete="off">'
+         + '<div class="suggestlist" id="ob-homesuggests"></div>'
+         + '<div class="sheetbtns"><button class="primary" id="ob-homegps">Use this phone&rsquo;s location</button></div>'
+         + '<div class="setnote" id="ob-homenote" style="display:none"></div>';
+  }
+  document.getElementById('ob-body').innerHTML = html;
+  var first = document.getElementById(step === 'code' ? 'ob-code' : step === 'name' ? 'ob-name' : 'ob-home');
+  if (first && step !== 'name') setTimeout(function(){ first.focus(); }, 150);
+}
+var obHomeFlow = { token:'', timer:null };
+function obHomeNote(msg, bad){
+  var el = document.getElementById('ob-homenote');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('bad', !!bad);
+  el.style.display = msg ? 'block' : 'none';
+}
+document.getElementById('onboard-overlay').addEventListener('click', function(ev){
+  if (ev.target.closest('#ob-back')){
+    if (onboard.i > 0){ onboard.i--; renderOnboard(); }
+    return;
+  }
+  if (ev.target.closest('#ob-codesave')){
+    var v = (document.getElementById('ob-code') || {}).value || '';
+    var m = v.trim().match(/k=([A-Za-z0-9_-]{8,})/) || v.trim().match(/^([A-Za-z0-9_-]{8,})$/);
+    if (!m){ toast('That code doesn\u2019t look right'); return; }
+    localStorage.setItem('lt-key', m[1]);
+    location.hash = 'k=' + m[1];
+    migrateScopedStorage(); scopeTouch();            // the device caches have a table to belong to now
+    toast('Joining…');
+    connectAndReady(m[1]).then(function(){ render(); syncBanner(); onboardNext(); });
+    return;
+  }
+  var ow = ev.target.closest('[data-obwho]');
+  if (ow){ user = ow.dataset.obwho; lsSet('lt-user', user); render(); onboardNext(); return; }
+  if (ev.target.closest('#ob-namesave')){
+    var nm = ((document.getElementById('ob-name') || {}).value || '').trim().slice(0, 24);
+    if (!nm){ var el = document.getElementById('ob-name'); if (el) el.focus(); return; }
+    var id = 'm' + uid();
+    Store.patch({ ['members/'+id+'/name']: nm, ['members/'+id+'/colorIdx']: nextColorIdx() });
+    user = id; lsSet('lt-user', user);
+    render(); onboardNext();
+    return;
+  }
+  if (ev.target.closest('#ob-homegps')){
+    if (!navigator.geolocation){ obHomeNote('No location on this device — type your suburb above instead.', true); return; }
+    obHomeNote('Getting location…');
+    navigator.geolocation.getCurrentPosition(function(pos){
+      Store.patch({ 'settings/home': { lat:+pos.coords.latitude.toFixed(5), lng:+pos.coords.longitude.toFixed(5), label:null } });
+      onboardNext();
+    }, function(err){
+      obHomeNote(err && err.code === 1
+        ? 'Location is blocked for this app. Type your suburb above instead.'
+        : 'Couldn\u2019t get a fix. Try again, or type your suburb above.', true);
+    }, { enableHighAccuracy:false, timeout:12000, maximumAge:300000 });
+    return;
+  }
+  var hs = ev.target.closest('[data-obhpid]');
+  if (hs){
+    document.getElementById('ob-homesuggests').innerHTML = '<div class="suggest"><span class="spinner"></span></div>';
+    Places.details(hs.dataset.obhpid, obHomeFlow.token).then(function(rec){
+      if (rec.lat == null){ toast('Couldn\u2019t place that one — try another'); document.getElementById('ob-homesuggests').innerHTML = ''; return; }
+      Store.patch({ 'settings/home': { lat:+rec.lat.toFixed(5), lng:+rec.lng.toFixed(5), label:(rec.suburb || rec.name || rec.address || null) } });
+      onboardNext();
+    }).catch(function(){ toast('Couldn\u2019t place that one — try another'); document.getElementById('ob-homesuggests').innerHTML = ''; });
+  }
+});
+document.getElementById('onboard-overlay').addEventListener('input', function(ev){
+  if (ev.target.id !== 'ob-home') return;
+  var q = ev.target.value.trim();
+  clearTimeout(obHomeFlow.timer);
+  if (!placesKeyReady()){ return; }
+  if (q.length < 3){ document.getElementById('ob-homesuggests').innerHTML = ''; return; }
+  if (!obHomeFlow.token) obHomeFlow.token = uid() + uid();
+  obHomeFlow.timer = setTimeout(function(){
+    Places.homeAutocomplete(q, obHomeFlow.token).then(function(list){
+      var host = document.getElementById('ob-homesuggests');
+      if (!host) return;
+      host.innerHTML = list.slice(0,6).map(function(x){
+        return '<div class="suggest" data-obhpid="'+esc(x.placeId)+'"><div class="s-name">'+esc(x.main)+'</div><div class="s-sub">'+esc(x.sub)+'</div></div>';
+      }).join('');
+    }).catch(function(){});
+  }, 300);
+});
+document.getElementById('onboard-overlay').addEventListener('keydown', function(ev){
+  if (ev.key !== 'Enter') return;
+  if (ev.target.id === 'ob-code'){ var b = document.getElementById('ob-codesave'); if (b) b.click(); }
+  else if (ev.target.id === 'ob-name'){ var b2 = document.getElementById('ob-namesave'); if (b2) b2.click(); }
+});
+
 /* ==================== boot ==================== */
+/* Connect to a table and settle, however badly the network is behaving. Split out of boot()
+   so the onboarding sheet can call it the moment a code is entered, instead of storing the
+   code and reloading the whole app to pick it up. */
+function connectAndReady(key){
+  return new Promise(function(resolve){
+    var settled = false;
+    var settle = function(){ if (!settled){ settled = true; resolve(); } };
+    initCloud(key).then(settle).catch(function(){
+      toast('Sync unavailable, using this phone only'); initLocal().then(settle);
+    });
+    setTimeout(function(){                         // 4s offline fallback: never hang on a blank screen
+      if (settled) return;
+      if (!state){ try { state = JSON.parse(lsGet('lt-state')||'null'); } catch(e){} if (!state) state = seedState(); }
+      syncBanner();
+      settle();
+    }, 4000);
+  });
+}
 function boot(){
   if ('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
-  var ready;
-  if (window.FIREBASE_CONFIG){
-    var key = tableKey();
-    if (!key){ document.getElementById('key-overlay').classList.add('show'); return; }  // wait for code (reloads after save)
-    ready = new Promise(function(resolve){
-      var settled = false;
-      var settle = function(){ if (!settled){ settled = true; resolve(); } };
-      initCloud(key).then(settle).catch(function(){
-        toast('Sync unavailable, using this phone only'); initLocal().then(settle);
-      });
-      setTimeout(function(){                         // 4s offline fallback: never hang on a blank screen
-        if (settled) return;
-        if (!state){ try { state = JSON.parse(lsGet('lt-state')||'null'); } catch(e){} if (!state) state = seedState(); }
-        syncBanner();
-        settle();
-      }, 4000);
-    });
-  } else {
-    ready = initLocal();
-  }
   apiPrune();
-  ready.then(function(){
-    render();
-    syncBanner();
-    if (!user) document.getElementById('who-overlay').classList.add('show');
-    else if (!home()) openHome();
-  });
+  if (!window.FIREBASE_CONFIG){ initLocal().then(afterReady); return; }
+  var key = tableKey();
+  if (!key){ startOnboard(); return; }             // the sheet connects once a code is entered
+  connectAndReady(key).then(afterReady);
+}
+function afterReady(){
+  render();
+  syncBanner();
+  if (onboardNeeded().length) startOnboard();
 }
 boot();
 
