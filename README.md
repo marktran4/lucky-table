@@ -120,6 +120,17 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   bylines and visit logs use them. Records written before this still render, falling
   back to the original two names. A new person joins by opening the invite link and
   tapping **Someone else** on the "who's on this phone?" step.
+- **A new table starts in build mode.** Below **five** saved places the Dine out tab is a
+  progress screen, not a picker: "Build your table — save 5 places you'd actually eat at",
+  a progress bar, the crowd-pleasers rail, and *Add one by name*. Every rail card has a
+  one-tap **+** that saves it straight to the list with no sheet in between (the card body
+  still opens the detail sheet). At five it celebrates and the normal home screen appears.
+  Five is the single number used by the copy, the bar and the unlock alike — at three every
+  draw returns the identical three cards and the wheel is decorative, which is a worse first
+  impression than one more tap of saving.
+  Build mode needs a home point and a Places key, because without them the rail is empty and
+  it would be a progress bar over nothing; that case gets **Set your area** instead, and
+  adding by name works with neither.
 - **First run is one sheet, not three.** Joining a table, saying who you are and
   setting a home point are three steps of a single flow, and only the ones actually
   missing are asked. Entering a code connects in place — no reload. The home step is
