@@ -171,6 +171,14 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .flowbar i{display:block; height:100%; background:var(--acc); border-radius:2px; transition:width .2s ease}
 #flowsheet h3{margin:0 0 4px}
 .flownote{font-size:12.5px; font-weight:700; color:var(--muted); margin:10px 2px 0}
+/* "Same as last time" — accent, so it doesn't compete with the white Next/Find places
+   button at the bottom of the same sheet. */
+.fs-same{
+  display:block; width:100%; background:var(--acc); color:#0A0A0A;
+  font-weight:900; font-size:15.5px; border-radius:99px; padding:13px; margin:0 0 6px;
+}
+.fs-same:active{background:var(--acc-dk)}
+.fs-orlabel{font-size:11px; font-weight:800; color:var(--muted); letter-spacing:.4px; text-transform:uppercase; margin:14px 2px 8px; text-align:left}
 .fs-pill.dice{background:var(--saffron-tint); color:var(--saffron)}
 .fs-pill.dice.on{background:var(--saffron); color:#0A0A0A}
 
@@ -205,7 +213,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
    directly above it, so it runs larger than the generic .findbtn used inside the funnel —
    and the gap between the two buttons is wider than the gap within either, so they read as
    two separate decisions rather than a pair. */
-.findbtn.homebtn{font-size:19px; padding:17px; margin-top:18px}
+.findbtn.homebtn{font-size:19px; padding:17px; margin-top:12px}
 .surprisebtn.homebtn{font-size:15px; padding:14px; margin-top:10px}
 
 /* relaxation chips */
@@ -950,8 +958,13 @@ var Places = {
   nearby: function(body){
     var mask = 'places.id,places.displayName,places.formattedAddress,places.addressComponents,places.location,'
       + 'places.googleMapsUri,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.priceLevel,'
-      + 'places.regularOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.photos,places.goodForChildren,places.menuForChildren,'
-      + 'places.reviews,places.editorialSummary';    // reviews+editorial ride the same SKU tier (no extra cost)
+      + 'places.regularOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.photos,places.goodForChildren,places.menuForChildren';
+    /* NO places.reviews / places.editorialSummary here. They are Atmosphere-tier fields and
+       lift the WHOLE call from Nearby Enterprise ($35/1k) to Enterprise+Atmosphere ($40/1k) —
+       on all 20 results, on every batch, to show dish notes on the one or two a person opens.
+       An older comment here claimed they rode the same tier at no extra cost; that was wrong
+       (checked against Google's pricing pages 2026-08-28). Notes are fetched per-result
+       instead, by fetchTasteNotes() -> Places.tasteCheck. */
     return fetch(PLACES_BASE+'/places:searchNearby', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'X-Goog-Api-Key':placesKey(), 'X-Goog-FieldMask':mask },
@@ -1093,8 +1106,67 @@ function mapDetails(d){
   return rec;
 }
 
+/* ==================== table-scoped device storage ====================
+   Four device-local caches describe ONE table's data: the offline snapshot (lt-state), the
+   unacknowledged-write journal (lt-pending), the daily discovery pool (lt-poprail) and who
+   this phone is on that table (lt-user). They used to sit under fixed global keys, so
+   switching table code — long-press the title and paste another, or open a different invite
+   link — left table A's queued writes in the journal for pendingFlush() to replay straight
+   into table B's ref, and showed A's cached places under B until the first snapshot landed.
+
+   Scoping each key by table code makes that structurally impossible rather than merely
+   unlikely: a patch journalled for A can only ever be read back under A, and switching back
+   later still finds it. lt-key (which table this phone is on), lt-sort and the lt-api-*
+   counters stay global — those are device facts, not table facts. */
+var STORE_SCOPED = ['lt-state', 'lt-pending', 'lt-poprail', 'lt-user'];
+var SCOPE_MAX = 5;                      // how many tables' caches this device keeps
+var SCOPE_REG = 'lt-scopes';
+function scopeKey(base, key){
+  key = (key == null) ? tableKey() : key;
+  return base + '::' + (key || 'local');   // 'local' = no table code yet, still never global
+}
+function lsGet(base){ try { return localStorage.getItem(scopeKey(base)); } catch(e){ return null; } }
+function lsSet(base, v){ try { localStorage.setItem(scopeKey(base), v); } catch(e){} }
+/* One-time lift of the pre-scoping global keys onto the current table, so an existing phone
+   keeps its state, its identity and anything queued offline across this upgrade. */
+function migrateScopedStorage(){
+  var k = tableKey();
+  if (!k) return;                        // nothing to attribute them to yet; try again next boot
+  STORE_SCOPED.forEach(function(base){
+    try {
+      var legacy = localStorage.getItem(base);
+      if (legacy == null) return;
+      if (localStorage.getItem(scopeKey(base, k)) == null) localStorage.setItem(scopeKey(base, k), legacy);
+      localStorage.removeItem(base);
+    } catch(e){}
+  });
+}
+/* Bound the growth scoping introduces: remember the tables this device has opened and drop
+   the caches of the least recently used once past SCOPE_MAX. */
+function scopeTouch(){
+  var k = tableKey();
+  if (!k) return;
+  try {
+    var reg = JSON.parse(localStorage.getItem(SCOPE_REG) || '{}');
+    if (!reg || typeof reg !== 'object') reg = {};
+    reg[k] = Date.now();
+    /* Deterministic order, and the LIVE table is never evictable whatever the clock says:
+       two tables opened in the same millisecond sort equal, and an unstable tie-break was
+       able to drop the cache of the table currently on screen. */
+    var order = Object.keys(reg).sort(function(a, b){ return (reg[b] - reg[a]) || (a < b ? -1 : a > b ? 1 : 0); });
+    order = [k].concat(order.filter(function(x){ return x !== k; }));
+    order.slice(SCOPE_MAX).forEach(function(dead){
+      STORE_SCOPED.forEach(function(base){ try { localStorage.removeItem(base + '::' + dead); } catch(e){} });
+      delete reg[dead];
+    });
+    localStorage.setItem(SCOPE_REG, JSON.stringify(reg));
+  } catch(e){}
+}
+migrateScopedStorage();
+scopeTouch();
+
 /* ==================== device-local state ==================== */
-var user = localStorage.getItem('lt-user') || '';
+var user = lsGet('lt-user') || '';
 var dist = 'any';                                            // session-only like the rest: near|mid|any, no filter carries over a reload
 var meal = clockMeal();                                      // auto from clock each load (used only when mealOn is switched on)
 var mealOn = false;                                          // no filters selected by default: the Hit List draws from the whole list
@@ -1222,7 +1294,15 @@ function migrateSchema(){
   if (schemaChecked || !state) return;
   if (Store.mode !== 'cloud' || !Store.ref) return;        // offline: leave the data alone, retry next boot
   schemaChecked = true;
-  if ((state.settings && state.settings.schema) === SCHEMA) return;
+  /* FORWARD-ONLY. An equality check downgrades: once one phone writes v3, a still-cached
+     v2 client sees 3 !== 2, runs its own migration and stamps settings/schema back to 2 —
+     which then lets the v3 client re-run its migration and resurrect anything the user had
+     since deleted. Old and new clients always overlap in a PWA (the service worker is
+     network-first, but a phone that hasn't been online yet is still on the old bundle), so
+     the guard has to hold for the OLDER client, not just the newer one. Never write a
+     schema number lower than the one already stored. */
+  var storedSchema = (state.settings && state.settings.schema) || 1;
+  if (storedSchema >= SCHEMA) return;
   var patch = {}, back = 0, stamped = 0;
   placesArr().forEach(function(p){
     if (!p.poolState){
@@ -1265,17 +1345,17 @@ function applyLocalPatch(obj){
    fallback for the whole session), the 4s offline boot, or a write the SDK never got to
    send before the app was closed — is silently erased by the first remote snapshot on
    the next successful launch, because that snapshot replaces `state` wholesale. */
-var PENDING_KEY = 'lt-pending';
+var PENDING_KEY = 'lt-pending';        // base name; scoped per table by lsGet/lsSet
 var PENDING_MAX_AGE = 7*86400000;   // older than a week: likelier to resurrect stale data than to help
 var PENDING_MAX = 300;
 var pendingSeq = 0, pendingFlushed = false;
 
 function cloudExpected(){ return !!(window.FIREBASE_CONFIG && localStorage.getItem('lt-key')); }
 function pendingRead(){
-  try { var q = JSON.parse(localStorage.getItem(PENDING_KEY)||'[]'); return Array.isArray(q) ? q : []; }
+  try { var q = JSON.parse(lsGet(PENDING_KEY)||'[]'); return Array.isArray(q) ? q : []; }
   catch(e){ return []; }
 }
-function pendingWrite(q){ try { localStorage.setItem(PENDING_KEY, JSON.stringify(q)); } catch(e){} }
+function pendingWrite(q){ lsSet(PENDING_KEY, JSON.stringify(q)); }
 function pendingAdd(obj){
   var id = Date.now().toString(36)+'-'+(++pendingSeq);
   var q = pendingRead();
@@ -1331,7 +1411,7 @@ Store.patch = function(obj){
     });
   } else {
     applyLocalPatch(obj);
-    localStorage.setItem('lt-state', JSON.stringify(state));
+    lsSet('lt-state', JSON.stringify(state));
     render();
   }
   syncBanner();
@@ -1422,7 +1502,7 @@ function initCloud(key){
           var v = snap.val();
           if (!v){ Store.ref.set(seedState()); return; }   // brand-new table: seed it
           state = v;
-          localStorage.setItem('lt-state', JSON.stringify(state));
+          lsSet('lt-state', JSON.stringify(state));
           syncBanner();
           res();
           render();
@@ -1434,9 +1514,9 @@ function initCloud(key){
     });
 }
 function initLocal(){
-  try { state = JSON.parse(localStorage.getItem('lt-state')||'null'); } catch(e){ state = null; }
+  try { state = JSON.parse(lsGet('lt-state')||'null'); } catch(e){ state = null; }
   if (!state) state = seedState();
-  localStorage.setItem('lt-state', JSON.stringify(state));
+  lsSet('lt-state', JSON.stringify(state));
   /* deliberately NO migrateSchema() here — see its comment. Local mode has no authoritative
      snapshot, and poolStateOf() already falls back to the legacy field, so nothing is broken
      by waiting for a real connection. */
@@ -1598,12 +1678,73 @@ function sample(arr, n){
   return a.slice(0, n);
 }
 
+/* ==================== draw log + weighting ====================
+   A uniform sample of 3 from a pool of ~15 shows you the same faces constantly: roughly
+   half of all draws share a card with the one before it, and the only thing sitting out
+   was the single last LOCKED-IN pick. Meanwhile `skips` had been counted on every
+   "Show 3 others" since day one and never read by anything.
+
+   So: remember the last DRAW_LOG_KEEP option-sets ON THE TABLE (both phones should agree
+   about what has just been offered), and bias the draw away from what was recently shown
+   and repeatedly skipped, and towards places that have been waiting.
+
+   Weights are soft on purpose. Nothing is ever excluded — a favourite you keep skipping
+   should get rarer, never impossible, or the list quietly shrinks to the places you happen
+   not to have opinions about. */
+var DRAW_LOG_KEEP = 10;
+function drawLogArr(){
+  var o = (state && state.drawLog) || {};
+  return Object.keys(o).map(function(k){ return Object.assign({ lid:k }, o[k] || {}); })
+                       .sort(function(a, b){ return (b.at||0) - (a.at||0); });
+}
+function logDraw(ids){
+  var patch = {};
+  patch['drawLog/'+uid()] = { at: Date.now(), ids: ids.slice() };
+  drawLogArr().slice(DRAW_LOG_KEEP - 1).forEach(function(e){ patch['drawLog/'+e.lid] = null; });
+  Store.patch(patch);
+}
+/* how many draws ago this place last appeared: 0 = the draw just gone, null = not in the log */
+function shownRecency(id){
+  var entries = drawLogArr();
+  for (var i=0;i<entries.length;i++){
+    if ((entries[i].ids || []).indexOf(id) !== -1) return i;
+  }
+  return null;
+}
+function drawWeight(p){
+  var w = 1, r = shownRecency(p.id);
+  if (r != null) w *= (r < 2 ? 0.25 : (r < 5 ? 0.5 : 1));
+  w *= 1 / (1 + 0.3 * (p.skips || 0));
+  var m = monthsOnList(p);
+  if (m != null) w *= 1 + 0.05 * Math.min(m, 6);      // waiting a while earns a nudge, capped
+  return Math.max(w, 0.01);                            // floor: never unreachable
+}
+/* Weighted draw without replacement. Falls back to a plain shuffle when the pool is small
+   enough that everything is coming anyway, or if every weight collapses to zero. */
+function weightedSample(arr, n, weightOf){
+  if (arr.length <= n) return sample(arr, n);
+  var pool = arr.slice(), out = [];
+  while (out.length < n && pool.length){
+    var total = 0, i, w;
+    for (i=0;i<pool.length;i++) total += Math.max(0, weightOf(pool[i]));
+    if (!(total > 0)){ out.push(pool.splice(Math.floor(Math.random()*pool.length), 1)[0]); continue; }
+    var r = Math.random() * total, acc = 0, pick = pool.length - 1;
+    for (i=0;i<pool.length;i++){
+      acc += Math.max(0, weightOf(pool[i]));
+      if (r < acc){ pick = i; break; }
+    }
+    out.push(pool.splice(pick, 1)[0]);
+  }
+  return out;
+}
+
 function findOptions(){
   nearby.active = false;
   var pool = drawPool();
   if (pool.length === 0){ draw.active = false; renderSpin(); return; }   // relaxation shown by renderSpin
-  var picks = sample(pool, 3).map(function(p){ return p.id; });
+  var picks = weightedSample(pool, 3, drawWeight).map(function(p){ return p.id; });
   draw = { active:true, options:picks, firstSet:picks.slice(), reshuffleUsed:false, pick:null };
+  logDraw(picks);
   renderSpin();
 }
 function reshuffle(){
@@ -1611,7 +1752,8 @@ function reshuffle(){
   var exclude = {}; draw.firstSet.forEach(function(id){ exclude[id] = true; });
   var pool = drawPool(exclude);
   draw.reshuffleUsed = true;
-  /* log a skip on each first-set place for future veto-memory (v2 data) */
+  /* Log a skip on each first-set place. No longer "future v2 data": drawWeight() reads
+     these, so passing on a place makes it rarer in later draws. */
   var patch = {};
   draw.firstSet.forEach(function(id){ var p = place(id); if (p) patch['places/'+id+'/skips'] = (p.skips||0)+1; });
   if (Object.keys(patch).length) Store.patch(patch);
@@ -1619,10 +1761,47 @@ function reshuffle(){
     toast('That was everything that fits. Pick one or spin the wheel.');
     return;                                          // keep current options
   }
-  draw.options = sample(pool, 3).map(function(p){ return p.id; });
+  draw.options = weightedSample(pool, 3, drawWeight).map(function(p){ return p.id; });
   draw.pick = null;
+  logDraw(draw.options);            // after draw.pick, so a local-mode render sees final state
   closeOverlay('result-overlay');
   renderSpin();
+}
+
+/* ==================== cross-session seen ledger ====================
+   nearby.seen only lives as long as the page does, so every reload re-served the same
+   POPULARITY top-20 — the single biggest source of "we've seen this one already". This is
+   the durable half: which places this device has actually PUT ON SCREEN, table-scoped
+   (Wave 0.5 helpers) so one table's history never steers another's.
+
+   Consulted at presentation time, never at fetch: it changes which of the places Google
+   returned get shown, and can never cause a dead end. */
+var SEEN_KEY = 'lt-seen', SEEN_TTL = 30*86400000, SEEN_MAX = 500, SEEN_REFRESH = 3600000;
+function seenRead(){
+  try { var o = JSON.parse(lsGet(SEEN_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; }
+  catch(e){ return {}; }
+}
+function seenWrite(o){ lsSet(SEEN_KEY, JSON.stringify(o)); }
+function seenPrune(o){
+  var now = Date.now();
+  Object.keys(o).forEach(function(k){ if (!o[k] || now - o[k] > SEEN_TTL) delete o[k]; });
+  var keys = Object.keys(o);
+  if (keys.length > SEEN_MAX){
+    keys.sort(function(a, b){ return o[a] - o[b]; })
+        .slice(0, keys.length - SEEN_MAX)
+        .forEach(function(k){ delete o[k]; });          // oldest out first
+  }
+  return o;
+}
+/* Rendering re-runs constantly, so only touch storage when a place is genuinely new or the
+   stamp is stale — otherwise the rail would rewrite this on every repaint. */
+function markSeen(ids){
+  if (!ids || !ids.length) return;
+  var o = seenRead(), now = Date.now(), dirty = false;
+  ids.forEach(function(id){
+    if (id && now - (o[id] || 0) > SEEN_REFRESH){ o[id] = now; dirty = true; }
+  });
+  if (dirty) seenWrite(seenPrune(o));
 }
 
 /* ==================== discovery: the suggest funnel ==================== */
@@ -1692,17 +1871,17 @@ function railOrder(list){
 }
 /* rail search centre: home for the POPULARITY seed; DISTANCE batches rotate their direction by the
    day so the pool samples different neighbourhoods day to day (not just a reshuffle of one fixed set) */
-function railCenter(batch){ return jitterCenter(popRailRadiusM(), batch ? batch + (railDay() % 8) : 0); }
+function railCenter(batch){ return jitterCenter(popRailRadiusM(), batch, railDay() % 8); }
 function railVisibleCount(){ return RAIL_FIRST + railClicks * RAIL_STEP; }
 function popCacheRead(){
   try {
-    var c = JSON.parse(localStorage.getItem(POP_CACHE_KEY) || 'null');
+    var c = JSON.parse(lsGet(POP_CACHE_KEY) || 'null');
     if (c && c.day === railDay() && c.homeKey === homeKey() && c.recs && c.recs.length) return c.recs;
   } catch(e){}
   return null;
 }
 function popCacheWrite(){
-  try { localStorage.setItem(POP_CACHE_KEY, JSON.stringify({ day: popRail.day, homeKey: popRail.homeKey, recs: popRail.recs })); } catch(e){}
+  lsSet(POP_CACHE_KEY, JSON.stringify({ day: popRail.day, homeKey: popRail.homeKey, recs: popRail.recs }));
 }
 function popRailRec(placeId){
   for (var i=0;i<popRail.recs.length;i++){ if (popRail.recs[i].placeId === placeId) return popRail.recs[i]; }
@@ -1805,11 +1984,15 @@ function popularRail(){
     if (!(popRail.loading || popRail.filling)) return '';
     var skel = '<div class="railcard railskel"><div class="railphoto"></div>'
       + '<div class="railname"></div><div class="railmeta"></div></div>';
-    return '<h2>Most popular nearby <small>finding spots…</small></h2>'
+    return '<h2>Tonight&rsquo;s crowd-pleasers <small>finding spots…</small></h2>'
       + '<div class="rail">' + skel + skel + '</div>';
   }
   var shown = pops.slice(0, railVisibleCount());
-  var html = '<h2>Most popular nearby <small>4.5&#9733;+ · 300+ reviews · fresh daily</small></h2><div class="rail">';
+  markSeen(shown.map(function(r){ return r.placeId; }));      // the rail counts as having seen them
+  /* The gate (4.5★+, 300+ reviews) used to be spelled out here, which read as spec rather
+     than an offer — and every card already prints its own rating and review count, so the
+     information is a glance away rather than lost. */
+  var html = '<h2>Tonight&rsquo;s crowd-pleasers <small>near you · fresh daily</small></h2><div class="rail">';
   shown.forEach(function(r){
     html += '<div class="railcard" data-poprail="'+esc(r.placeId)+'">' + photoHtml(r, 'railphoto')
       + '<div class="railname">'+esc(r.name)+'</div>'
@@ -1880,11 +2063,15 @@ function discoverySig(){
    but DISTANCE from a shifted centre returns a genuinely different nearest-20 — so batch 0 uses
    POPULARITY (seed the best) and every later batch uses DISTANCE (see nearbyRank). Shared by
    discovery + the popular rail. */
-function jitterCenter(radiusM, batch){
+/* `phase` rotates the DIRECTION only. Folding the day into `batch` (which the rail used to
+   do) also inflates `ring`, because both are derived from it — so a "within 10 km" search
+   quietly started returning 15-20 km places later in the day's rotation. Keep them
+   separate: batch decides how far out, phase decides which way. */
+function jitterCenter(radiusM, batch, phase){
   var h = home();
   if (!batch) return { latitude:h.lat, longitude:h.lng };
   var dirs = 8, ring = Math.floor((batch - 1) / dirs) + 1;
-  var ang = ((batch - 1) % dirs) * (2 * Math.PI / dirs);
+  var ang = (((batch - 1) + (phase || 0)) % dirs) * (2 * Math.PI / dirs);
   var m = radiusM * 0.5 * ring;
   return {
     latitude:  h.lat + (m * Math.cos(ang)) / 111320,
@@ -1902,7 +2089,7 @@ function withinRing(r, radiusM){
   return km == null || km*1000 <= radiusM;
 }
 function nearbyRank(batch){ return batch === 0 ? 'POPULARITY' : 'DISTANCE'; }
-function nearbyCenter(batch){ return jitterCenter(nearbyRadiusM(), batch); }
+function nearbyCenter(batch){ return jitterCenter(nearbyRadiusM(), batch, railDay() % 8); }
 function nearbyFetch(batch){
   return Places.nearby({
     includedPrimaryTypes: nearbyIncludedTypes(),
@@ -1925,8 +2112,23 @@ function mergeNearby(recs){
 }
 function presentBroad(unseen){
   nearby.shown = {};
-  nearby.broad = sample(unseen, NEARBY_MAX);
+  /* Don't re-offer what the rail is already showing on the same home screen — but only
+     while there are enough alternatives to fill the list without it. */
+  var railIds = {};
+  popRail.recs.forEach(function(r){ if (r.placeId) railIds[r.placeId] = true; });
+  var offRail = unseen.filter(function(r){ return !railIds[r.placeId]; });
+  if (offRail.length >= NEARBY_MAX) unseen = offRail;
+  /* Prefer places this device hasn't shown in the last 30 days. A soft preference, not a
+     filter: if there aren't enough fresh ones, previously-seen places fill the rest. */
+  var ledger = seenRead();
+  var fresh = unseen.filter(function(r){ return !ledger[r.placeId]; });
+  nearby.broad = sample(fresh, NEARBY_MAX);
+  if (nearby.broad.length < NEARBY_MAX){
+    var rest = unseen.filter(function(r){ return ledger[r.placeId]; });
+    nearby.broad = nearby.broad.concat(sample(rest, NEARBY_MAX - nearby.broad.length));
+  }
   nearby.broad.forEach(function(r){ nearby.seen[r.placeId] = true; nearby.shown[r.placeId] = true; });
+  markSeen(nearby.broad.map(function(r){ return r.placeId; }));
   nearby.selected = {};
   if (nearby.batch === 0 && nearby.pool.length && nearby.pool.length <= 3){   // tiny pool: skip the shortlist, go to the wheel set
     nearby.final = nearby.broad.slice();
@@ -2022,10 +2224,16 @@ function buildDiscoveryRec(rec){
     photoUri: rec.photoUri, hours: rec.hours, kidFriendly: rec.kidFriendly,
     by: user || null, addedAt: Date.now(), poolState: 'want', skips: 0, discovered: true
   };
-  var td = mineDishes(rec);
-  if (td && (td.dishes.length || td.quotes.length || td.summary)){
-    base.tasteNotes = { summary:td.summary, dishes:td.dishes, quotes:td.quotes, fetchedAt: Date.now() };
+  /* Prefer notes already fetched onto the rec; only mine inline if this rec still carries
+     raw reviews (nothing does since the mask change, but a stale in-memory rec might). */
+  var tn = rec.tasteNotes || null;
+  if (!tn){
+    var td = mineDishes(rec);
+    if (td && (td.dishes.length || td.quotes.length || td.summary)){
+      tn = { summary:td.summary, dishes:td.dishes, quotes:td.quotes, fetchedAt: Date.now() };
+    }
   }
+  if (tn) base.tasteNotes = tn;
   Object.keys(base).forEach(function(k){ if (base[k] === undefined) delete base[k]; });
   return base;
 }
@@ -2184,6 +2392,20 @@ function render(){
 
 function mealVerb(){ return meal === 'lunch' ? 'lunch' : 'dinner'; }
 
+/* Below this many places in the raw pool, the chip bar is mostly a row of ways to empty
+   your own list — six controls over a handful of restaurants. It collapses to one
+   affordance until the list is big enough for narrowing to be a real question. */
+var CHIPS_MIN_POOL = 8;
+var chipsExpanded = false;                 // session-only: asked to see them, keep them
+function rawPoolSize(){
+  return placesArr().filter(function(p){ return !isBeen(p) && !p.blocked && !isExcludedPlace(p); }).length;
+}
+/* anyFilterOn() FIRST and unconditionally: collapsing the bar while a filter is active
+   would hide the very reason the results are thin, which is the opposite of the point.
+   An active filter always shows its chip, its count and Clear all. */
+function chipsVisible(){
+  return anyFilterOn() || chipsExpanded || rawPoolSize() >= CHIPS_MIN_POOL;
+}
 function anyFilterOn(){
   return dist !== 'any' || Object.keys(cuisines).length > 0 || Object.keys(prices).length > 0
     || ratingMin > 0 || mealOn || openNow || kidOn || starOn;
@@ -2198,6 +2420,11 @@ function chipHtml(kind, label, on){
   return '<button class="chip'+(on?' on':'')+'" data-fs="'+kind+'">'+label+' <span class="caret">&#9660;</span></button>';
 }
 function renderFilters(){
+  if (!chipsVisible()){
+    document.getElementById('filterbar').innerHTML =
+      '<button class="chip" id="chipsexpand">Narrow it down <span class="caret">&#9660;</span></button>';
+    return;
+  }
   var cuKeys = Object.keys(cuisines), prKeys = Object.keys(prices);
   var cuLbl = !cuKeys.length ? 'Cuisine' : (cuKeys.length === 1 ? esc(cuKeys[0]) : 'Cuisine · '+cuKeys.length);
   var prLbl = !prKeys.length ? 'Price' : (prKeys.length === 1 ? '$'.repeat(+prKeys[0]) : 'Price · '+prKeys.length);
@@ -2315,6 +2542,27 @@ function cloneAnswers(a){
 }
 /* answers behind the CURRENT discovery search; null until the flow has been run once */
 var discAns = null;
+/* ...and the last set that actually ran a search, remembered ACROSS reloads (table-scoped).
+   The four questions are the same four every time for most people; re-asking them from
+   scratch every session is the cost of the flow, not its value. Session semantics are
+   unchanged — this only pre-fills the draft and offers a one-tap repeat. */
+var LAST_ANS_KEY = 'lt-lastanswers', LAST_ANS_TTL = 30*86400000;
+function saveLastAnswers(a){
+  try { lsSet(LAST_ANS_KEY, JSON.stringify({ at: Date.now(), a: a })); } catch(e){}
+}
+function loadLastAnswers(){
+  try {
+    var o = JSON.parse(lsGet(LAST_ANS_KEY) || 'null');
+    if (!o || !o.a || (Date.now() - (o.at || 0)) > LAST_ANS_TTL) return null;
+    var a = o.a;                                    // rebuild defensively: stored shape may age
+    return { dist: a.dist || 'any', cuisines: a.cuisines || {}, prices: a.prices || {},
+             ratingMin: a.ratingMin || 0, cuisineOverride: a.cuisineOverride || null };
+  } catch(e){ return null; }
+}
+function answersAreSet(a){
+  if (!a) return false;
+  return FLOW_STEPS.some(function(st){ return answerIsSet(a, st.key); });
+}
 var flow = { step:0, draft:null };
 var FLOW_STEPS = [
   { key:'dist',    q:'How far are we going?' },
@@ -2329,7 +2577,7 @@ function flowStepIndex(key){
 function openFlow(step){
   if (!placesKeyReady()) return;
   if (!home()){ openHome(); return; }                  // a distance question is meaningless without a home point
-  flow.draft = cloneAnswers(discAns || blankAnswers());
+  flow.draft = cloneAnswers(discAns || loadLastAnswers() || blankAnswers());
   flow.step = Math.max(0, Math.min(FLOW_STEPS.length - 1, step || 0));
   renderFlow();
   document.getElementById('flow-overlay').classList.add('show');
@@ -2391,6 +2639,17 @@ function renderFlow(){
       + '</div>'
       + '<div class="flownote">Somewhere new never suggests below '+MIN_RATING.toFixed(1)+' &#9733; anyway.</div>';
   }
+  /* Only on the first question, and only before this session has run the flow once —
+     after that `discAns` already holds the answers and the summary line above the results
+     is the way back in. */
+  if (i === 0 && !discAns){
+    var la = loadLastAnswers();
+    if (answersAreSet(la)){
+      html = '<button class="fs-same" id="flow-same">Same as last time'
+           +   '<span class="btnsub">' + esc(answerSummary(la)) + '</span></button>'
+           + '<div class="fs-orlabel">or start again</div>' + html;
+    }
+  }
   document.getElementById('flow-body').innerHTML = html;
   document.getElementById('flow-next').textContent = last ? 'Find places' : 'Next';
   document.getElementById('flow-skip').textContent = last ? 'Skip and search' : 'Skip';
@@ -2444,6 +2703,7 @@ function answerSummary(a){
    batch rotation, seen-set variety and the 15-row list are all untouched. */
 function startFlowSearch(){
   discAns = cloneAnswers(flow.draft);
+  saveLastAnswers(discAns);
   closeFlow();
   nearby.wide = false;                                  // fresh answers, don't inherit a previous widen
   setDiscCuisineOverride(discAns.cuisineOverride);
@@ -2513,7 +2773,11 @@ function renderSpin(){
   } else if (n === 0){
     renderRelaxation(host);
   } else {
-    host.innerHTML = popularRail() + jennysPicksBtnHtml() + somewhereNewBtnHtml();
+    /* Actions first, rail second. The rail is a full-bleed row of photos; sitting above
+       the primary button it pushed "draw 3 from your list" toward the fold and read as the
+       main event, which it isn't. Ordering settles that argument; the CSS below no longer
+       has to win it on font size. */
+    host.innerHTML = jennysPicksBtnHtml() + somewhereNewBtnHtml() + popularRail();
     loadPopularRail();
   }
 }
@@ -2547,9 +2811,9 @@ function renderRelaxation(host){
   /* raw pool = visited/blocked only, everything else off */
   var raw = placesArr().filter(function(p){ return !isBeen(p) && !p.blocked; }).length;
   if (raw < 3){
-    host.innerHTML = railHtml + '<div class="relax"><p>The list is running dry. Add a couple of places.</p>'
+    host.innerHTML = '<div class="relax"><p>The list is running dry. Add a couple of places.</p>'
       + '<button class="relaxchip" id="relax-add">Add a place</button>'
-      + somewhereNewBtnHtml() + '</div>';
+      + somewhereNewBtnHtml() + '</div>' + railHtml;
     loadPopularRail();
     return;
   }
@@ -2570,7 +2834,7 @@ function renderRelaxation(host){
     html += '<button class="relaxchip" data-relax="'+best.key+'">'+best.label+' (+'+best.n+')</button>';
   }
   html += '<button class="relaxclear" id="relax-clear">clear all filters</button>' + somewhereNewBtnHtml() + '</div>';
-  host.innerHTML = railHtml + html;
+  host.innerHTML = html + railHtml;
   loadPopularRail();
 }
 
@@ -2749,21 +3013,48 @@ function openResult(ctx){
 }
 
 /* "what people say" — mined dish notes; hidden entirely when there's nothing honest to show */
+var TASTE_TTL = 30*24*60*60*1000;
+var tasteInflight = {};                       // placeId -> in-flight promise
+/* One request per place, however many surfaces ask. Opening a rail card, then the same
+   place from a discovery result, used to be two identical billable calls. */
+function fetchTasteNotes(placeId){
+  if (tasteInflight[placeId]) return tasteInflight[placeId];
+  var pr = Places.tasteCheck(placeId).then(function(d){
+    delete tasteInflight[placeId];
+    return mineDishes({ editorial:d.editorial, reviews:d.reviews });
+  }).catch(function(e){ delete tasteInflight[placeId]; throw e; });
+  tasteInflight[placeId] = pr;
+  return pr;
+}
+function savedIdForPlaceId(placeId){
+  var m = placesArr().filter(function(sp){ return sp.placeId && sp.placeId === placeId; })[0];
+  return m ? m.id : null;
+}
+/* THE RACE: a nearby rec is a plain in-memory object, and lockIn() reads it synchronously
+   when it builds the record to save. If the taste fetch lands after the user has locked in,
+   mutating the rec changes nothing that was stored. So always look the place up by placeId
+   at resolve time and patch it if it exists by then — whether it was saved a second ago or
+   a year ago. */
+function persistTasteNotes(placeId, notes){
+  var id = savedIdForPlaceId(placeId);
+  if (!id) return false;
+  Store.patch({ ['places/'+id+'/tasteNotes']: notes });
+  return true;
+}
 function renderTaste(ctx, p){
-  var notes = (ctx.src === 'nearby') ? mineDishes(p) : (p.tasteNotes || null);
-  paintTaste(notes);
-  if (ctx.src === 'saved' && placesKeyReady() && p.placeId){
-    var tn = p.tasteNotes;
-    var stale = !tn || !tn.fetchedAt || (Date.now()-tn.fetchedAt) > 30*24*60*60*1000;
-    if (stale){
-      Places.tasteCheck(p.placeId).then(function(d){
-        if (!sameCtx(draw.pick, ctx)) return;
-        var mined = mineDishes({ editorial:d.editorial, reviews:d.reviews });
-        paintTaste(mined);
-        Store.patch({ ['places/'+ctx.id+'/tasteNotes']: { summary:mined.summary, dishes:mined.dishes, quotes:mined.quotes, fetchedAt: Date.now() } });
-      }).catch(function(){});
-    }
-  }
+  /* Nearby recs no longer arrive with reviews attached (see the nearby field mask), so a
+     rec carries notes only once they have been fetched and cached onto it. */
+  var cached = p.tasteNotes || null;
+  paintTaste(cached);
+  if (!placesKeyReady() || !p.placeId) return;
+  var stale = !cached || !cached.fetchedAt || (Date.now() - cached.fetchedAt) > TASTE_TTL;
+  if (!stale) return;
+  fetchTasteNotes(p.placeId).then(function(mined){
+    var notes = { summary:mined.summary, dishes:mined.dishes, quotes:mined.quotes, fetchedAt: Date.now() };
+    p.tasteNotes = notes;                       // free on reopen, and picked up if saved later
+    if (sameCtx(draw.pick, ctx)) paintTaste(notes);
+    persistTasteNotes(p.placeId, notes);        // covers a save that happened mid-flight
+  }).catch(function(){});
 }
 function paintTaste(notes){
   var el = document.getElementById('res-taste');
@@ -3601,6 +3892,7 @@ document.getElementById('fab').addEventListener('click', openAdd);
 document.getElementById('view-spin').addEventListener('click', function(ev){
   var tg = ev.target.closest('[data-toggle]');
   if (tg){ if (tg.dataset.toggle === 'star'){ starOn = !starOn; draw.active = false; renderSpin(); } return; }
+  if (ev.target.closest('#chipsexpand')){ chipsExpanded = true; renderFilters(); return; }
   var fc = ev.target.closest('[data-fs]'); if (fc){ openFilterSheet(fc.dataset.fs); return; }
   if (ev.target.closest('#clearfilters')){ clearAllFilters(); draw.active = false; nearby.active = false; renderSpin(); return; }
   if (ev.target.closest('#findbtn')){ findOptions(); return; }
@@ -3692,6 +3984,11 @@ document.getElementById('flow-overlay').addEventListener('click', function(ev){
     else if (k === 'price'){ var pl = +v; if (d.prices[pl]) delete d.prices[pl]; else d.prices[pl] = true; }
     else if (k === 'rating') d.ratingMin = +v;
     renderFlow(); return;
+  }
+  if (ev.target.closest('#flow-same')){
+    var la = loadLastAnswers();
+    if (la){ flow.draft = cloneAnswers(la); startFlowSearch(); }
+    return;
   }
   if (ev.target.closest('#flow-dice')){ flowSpinCuisine(); return; }
   if (ev.target.closest('#flow-back')){ flowBack(); return; }
@@ -3945,7 +4242,7 @@ document.getElementById('add-cancel').addEventListener('click', function(){ clos
 /* who overlay */
 document.getElementById('who-overlay').addEventListener('click', function(ev){
   var b = ev.target.closest('button[data-who]'); if (!b) return;
-  user = b.dataset.who; localStorage.setItem('lt-user', user);
+  user = b.dataset.who; lsSet('lt-user', user);
   closeOverlay('who-overlay');
   if (document.getElementById('settings-overlay').classList.contains('show')) renderSettings();
   else if (!home()) openHome();
@@ -4062,7 +4359,7 @@ function boot(){
       });
       setTimeout(function(){                         // 4s offline fallback: never hang on a blank screen
         if (settled) return;
-        if (!state){ try { state = JSON.parse(localStorage.getItem('lt-state')||'null'); } catch(e){} if (!state) state = seedState(); }
+        if (!state){ try { state = JSON.parse(lsGet('lt-state')||'null'); } catch(e){} if (!state) state = seedState(); }
         syncBanner();
         settle();
       }, 4000);
