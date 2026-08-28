@@ -198,7 +198,17 @@ name entry, but there's no autocomplete or live open-check.
    **unrestricted for now** (the seed script can't use a referrer-locked key).
 3. **Set the guardrails before you share the app:**
    - Budget: **$5/month** budget with alerts at 50% and 100%.
-   - Quota: cap **Places API (New) requests at ~200/day** (real use is under 10).
+   - Quota: **per-SKU** daily caps on Places API (New) — a single "requests/day"
+     number does not exist, each request type has its own row:
+     `SearchNearby` **500**, `GetPlace` **500**, `AutocompletePlaces` **500**,
+     `GetPhotoMedia` **1,000**. Google's defaults are 75,000-175,000/day, i.e.
+     effectively uncapped. Two phones use well under 100/day in total, so these
+     leave roughly 15x headroom while capping a runaway at about US$36/day
+     instead of US$2,600. **Verified 2026-08-28: these were never applied** —
+     the caps this file prescribed had only ever been written down.
+     Quotas reset at midnight US Pacific, so a tripped cap means the rail,
+     discovery and add-search are dead until then; the saved-list draw, the
+     wheel and everything else keep working, because they make no API calls.
 4. After seeding (step 5) come back and lock the key down:
    - **API restriction:** Places API (New) only.
    - **Application restriction:** HTTP referrers, `https://marktran4.github.io/*`
