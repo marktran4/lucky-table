@@ -14,28 +14,42 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 
 ## How it works
 
-- **Dine out tab** is home. Filter chips (Distance / Cuisine / Price / Rating /
+- **Dine out tab** is home. The **two entry points come first**, in this order:
+  **Jenny's Picks** (the main feature, always the big accent button and always on
+  top — including when no Places key is set and it is the only one shown) and
+  **Somewhere new**. Everything else sits below them.
+- Filter chips (Distance / Cuisine / Price / Rating /
   More) open bottom sheets. **No filters are selected by default** (and none
   carry over a reload), so Jenny's Picks draws from the whole saved list —
   seeded and manually added places alike; a **Clear all** chip appears at the
   end of the row whenever any filter is active. The chips govern **Jenny's Picks
   only** — Somewhere new takes its constraints from the guided flow instead (see
   below), so a chip you set for the saved list never silently narrows a Google
-  search. A
-  **Most popular nearby** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
+  search. **Below ~8 places in the pool the whole row collapses** to a single
+  "Narrow it down" chip — six ways to shrink a list of five is noise. It expands
+  on tap for the rest of the session, and it is **always shown in full whenever a
+  filter is active**, however small the list, so the bar can never hide the reason
+  results look thin.
+- The **Tonight's crowd-pleasers** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
   crowd-pleasers near your home point that you haven't saved yet, not places
   already on your list. It **rotates daily**: the day's pool of ~21 is fetched
-  once and cached (in localStorage, by date + home point), then ordered by a
-  date-seeded shuffle, so it's the same 6 all day and on both phones but a
-  different set tomorrow. Same-day reopens make zero Google calls (pool + photo
+  once and cached (in localStorage, by date + home point + table), then ordered by a
+  date-seeded shuffle, so it's the same 6 all day and a different set tomorrow.
+  Both phones usually land on the same 6 because the shuffle is deterministic and
+  they ask Google the same question — but the cache is per-device, so each phone
+  builds the day's pool once for itself; it is not shared through the table. Same-day reopens make zero Google calls (pool + photo
   URLs come from cache), which is cheaper than the old fetch-on-every-open. It
   shows 6 to start; each **Show more** tap reveals 5 more from the day's pool for
   up to 3 taps, then the button retires. It shows even when the saved list is
-  empty. It sits above the tab's **two entry points**, in this order:
-  **Jenny's Picks** (draw 3 from the saved list, live pool count on the button)
-  and **Somewhere new** (Google discovery of new nearby spots). Jenny's Picks is
-  the main feature, so it is always the big accent button and always on top —
-  including when no Places key is set and it is the only one shown. Tap a card or
+  empty, and it sits **below** the two entry points — it is a suggestion, not the
+  main event, and above them it pushed the primary button toward the fold.
+  Its cards each print their own rating and review count, which is where the
+  4.5★/300+ gate is visible rather than spelled out in the heading.
+- **Jenny's Picks** draws 3 from the saved list, live pool count on the button;
+  the draw is **weighted** — places shown in the last few draws, and ones you keep
+  skipping past, come up less often, while places that have been waiting come up more.
+  Nothing is ever excluded, so a much-skipped favourite still turns up eventually.
+  **Somewhere new** is Google discovery of new nearby spots. Tap a card or
   **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
   Call, or **Show 3 others** once. Mega fast-food franchises (McDonald's, KFC,
   Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`)
@@ -70,6 +84,12 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   a "seen" set, so "show a different 15" and repeated Somewhere new searches only show
   places you haven't seen this session (verified live: ~15 all-new per tap). When
   Google is genuinely tapped out it recycles the pool rather than dead-ending.
+  A **30-day seen ledger** on the phone carries that across reloads too, so reopening the
+  app no longer re-serves the same top-20 it showed yesterday; it is a preference, not a
+  filter, so a thin result list fills up with already-seen places rather than dead-ending.
+  Discovery also skips whatever the rail is showing on the same screen, as long as there
+  are enough others to fill the list. Each day rotates which *direction* the later batches
+  search, without changing how far out they go.
 - **Places tab** holds the shortlist (Want to try / Been). Tap **+** to add a place
   by name (Google fills the details). **We went** moves it to Been and out of the
   pool. **Swipe a row right to remove it** (a 5-second Undo snackbar appears);
@@ -199,9 +219,17 @@ GitHub Pages. First build can take a minute.
   Database (compat CDN), path-patch writes, `on('value')` listener, localStorage
   mirror, 4s offline-fallback boot, `#k=` table-code pairing, who-is-this-phone
   overlay.
-- Google Places (New) is called **only** at add time, on Refresh details, and
-  once per locked-in pick (the live open-check). The everyday spin loop makes
-  zero API calls (opening hours are stored and checked client-side).
+- Google Places (New) calls, in full: the add flow (autocomplete + details + photo), an
+  open-check when you open a *saved* place's result card, "Refresh details", the daily
+  **Most popular nearby** pool (once per day per phone, then free from cache), a photo per
+  card actually shown, a **Somewhere new** search per batch, and a dish-notes lookup the
+  first time a place's result card is opened (cached for 30 days, deduped in flight).
+  Drawing from the saved list and spinning the wheel still cost nothing — opening hours
+  are stored and checked client-side.
+- The nearby search deliberately does **not** request `reviews`/`editorialSummary`: they
+  are Atmosphere-tier fields that would bill the whole 20-result call at the top rate to
+  show dish notes on the one or two places anyone opens. Those are fetched per place
+  instead. Don't add them back to that field mask.
 - Icons are generated by `../make_icons.py` (pure stdlib, plum plate + cutlery).
 - Source of truth lives in `~/side-projects/lucky-table/`; the
   `marktran4/lucky-table` repo is the GitHub Pages deploy target.
