@@ -15,15 +15,17 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 ## How it works
 
 - **Dine out tab** is home. The **two entry points come first**, in this order:
-  **Jenny's Picks** (the main feature, always the big accent button and always on
+  **your picks** (the main feature, always the big accent button and always on
   top — including when no Places key is set and it is the only one shown) and
-  **Somewhere new**. Everything else sits below them.
+  **Somewhere new**. Everything else sits below them. The first button carries
+  **the table's own name for its picks** — "Our Picks" until someone renames it
+  in Settings (this table calls it "Jenny's Picks").
 - Filter chips (Distance / Cuisine / Price / Rating /
   More) open bottom sheets. **No filters are selected by default** (and none
-  carry over a reload), so Jenny's Picks draws from the whole saved list —
+  carry over a reload), so the picks draw from the whole saved list —
   seeded and manually added places alike; a **Clear all** chip appears at the
-  end of the row whenever any filter is active. The chips govern **Jenny's Picks
-  only** — Somewhere new takes its constraints from the guided flow instead (see
+  end of the row whenever any filter is active. The chips govern **the saved-list
+  picks only** — Somewhere new takes its constraints from the guided flow instead (see
   below), so a chip you set for the saved list never silently narrows a Google
   search. **Below ~8 places in the pool the whole row collapses** to a single
   "Narrow it down" chip — six ways to shrink a list of five is noise. It expands
@@ -45,14 +47,15 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   main event, and above them it pushed the primary button toward the fold.
   Its cards each print their own rating and review count, which is where the
   4.5★/300+ gate is visible rather than spelled out in the heading.
-- **Jenny's Picks** draws 3 from the saved list, live pool count on the button;
+- **The picks button** draws 3 from the saved list, live pool count on it;
   the draw is **weighted** — places shown in the last few draws, and ones you keep
   skipping past, come up less often, while places that have been waiting come up more.
   Nothing is ever excluded, so a much-skipped favourite still turns up eventually.
   **Somewhere new** is Google discovery of new nearby spots. Tap a card or
   **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
   Call, or **Show 3 others** once. Mega fast-food franchises (McDonald's, KFC,
-  Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`)
+  Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`,
+  global product policy, not a per-table setting)
   are kept out of every suggestion, saved list and discovery alike. Other chains
   that aren't banned are **collapsed to one location** in discovery + the rail
   (`brandKey`): you won't see El Jannah from two suburbs. It keys on the first two
@@ -103,8 +106,27 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   pin opens the same detail sheet as the list. Google Maps loads **only on first
   open of this tab**, never at app boot, and the view makes zero Places calls.
 - **Settings** (gear, top right) covers the home point and distance rings, who this
-  phone is, the masked table code + copy-invite-link, sync status, and the Places
-  API state. Most of this used to be reachable once at first launch and never again.
+  phone is, **what this table calls its picks**, **Never suggest**, the masked table
+  code + copy-invite-link, sync status, and the Places API state. Most of this used
+  to be reachable once at first launch and never again.
+- **Never suggest** is per table and starts empty. Add a word (say `indian`, or
+  `oyster`) and it is matched anywhere in a place's cuisine, on every phone at the
+  table, for both the saved list and Google discovery. This used to be a hardcoded
+  list in the source, which was fine as one household's preference and wrong the
+  moment a second table existed — an invisible exclusion nobody could see or undo.
+  The mega fast-food block (`BANNED_NAME`) is deliberately **not** part of this: it
+  is a product stance about what the app is for, not a taste, so it stays global.
+- **People at the table are data.** Each member has a name they typed and a colour;
+  bylines and visit logs use them. Records written before this still render, falling
+  back to the original two names. A new person joins by opening the invite link and
+  tapping **Someone else** on the "who's on this phone?" step.
+- **First run is one sheet, not three.** Joining a table, saying who you are and
+  setting a home point are three steps of a single flow, and only the ones actually
+  missing are asked. Entering a code connects in place — no reload. The home step is
+  required here, because discovery and the crowd-pleasers rail both need it and
+  skipping it strands a brand-new table on an empty screen; the same sheet opened
+  later from Settings still has **Skip**. Adding a place by name never needs a home
+  point or a Places key.
 - **A star** marks a favourite. `★ Favourites` on the Dine out filter bar draws only
   from starred places; it clears with **Clear all** like every other filter, and it
   never silently weights the odds.
