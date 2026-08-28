@@ -714,6 +714,18 @@ textarea.txtinput{min-height:60px; resize:vertical}
   </div>
 </div>
 
+<!-- another table's invite link, opened while the app is already running -->
+<div class="overlay" id="switch-overlay">
+  <div class="sheet">
+    <h3>Switch table?</h3>
+    <p id="switch-sub"></p>
+    <div class="sheetbtns">
+      <button class="primary" id="switch-go">Open that table</button>
+      <button class="quiet" id="switch-cancel">Stay on this one</button>
+    </div>
+  </div>
+</div>
+
 <!-- home location overlay -->
 <div class="overlay" id="home-overlay">
   <div class="sheet">
@@ -1613,6 +1625,33 @@ function tableKey(){
 
 function seedState(){ return { settings:{ nearKm:DEFAULT_NEAR, midKm:DEFAULT_MID, schema:SCHEMA }, places:{} }; }
 
+/* 'join' unless the person explicitly asked to start a table. Reset after one use so a later
+   reconnect to a genuinely missing node cannot quietly create one. */
+var joinIntent = 'join';
+var tableMissing = false;
+/* The code IS the access control until Phase C, so it has to be unguessable: crypto-random
+   over a 32-char alphabet, 12 chars, about 60 bits. l/o/0/1 are left out because these get
+   read aloud and retyped. */
+function newTableCode(){
+  var alpha = 'abcdefghijkmnpqrstuvwxyz23456789', out = '', i;
+  var buf = new Uint8Array(12);
+  if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(buf);
+  else for (i=0;i<12;i++) buf[i] = Math.floor(Math.random()*256);
+  for (i=0;i<12;i++) out += alpha[buf[i] % alpha.length];
+  return out;
+}
+function handleTableNotFound(){
+  try { Store.ref.off(); } catch(e){}
+  Store.ref = null;
+  Store.mode = 'local';
+  tableMissing = true;
+  try { localStorage.removeItem('lt-key'); } catch(e){}   // don't keep retrying a code that isn't a table
+  if (!state) state = seedState();
+  syncBanner();
+  render();
+  startOnboard();                                         // back to the code step, which shows why
+}
+
 function loadScript(src){
   return new Promise(function(res, rej){
     var s = document.createElement('script');
@@ -1621,13 +1660,38 @@ function loadScript(src){
   });
 }
 
+var FB_CDN = 'https://www.gstatic.com/firebasejs/10.14.1/';
+/* WHAT ANONYMOUS AUTH ACTUALLY BUYS — do not oversell this.
+
+   Anyone can mint an anonymous identity from the public Firebase config, so a rule of
+   `auth != null` does NOT restrict writes to this app: the TABLE CODE remains the real
+   bearer credential. What it does buy is a stable auth.uid for rules to build on, and it
+   raises the bar past a bare REST call. It is one layer of a stack — validation rules and
+   size caps bound the blast radius, App Check is what would genuinely restrict writes to
+   this app, and quotas plus monitoring catch abuse. Real per-table authorization needs
+   membership-based rules, which is Phase C.
+
+   FAILING HERE IS NOT FATAL, on purpose. The rollout order has to be: ship a client that
+   TRIES to authenticate, confirm both phones do, and only then tighten the rules. Tighten
+   first and every un-updated phone stops syncing. So a sign-in failure logs and continues. */
+function signInAnon(){
+  if (!firebase.auth) return Promise.resolve();
+  if (firebase.auth().currentUser) return Promise.resolve();
+  return firebase.auth().signInAnonymously().catch(function(e){
+    console.warn('[lucky] anonymous auth unavailable, continuing unauthenticated:', e && e.code);
+  });
+}
 function initCloud(key){
-  return loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js')
-    .then(function(){ return loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js'); })
+  return loadScript(FB_CDN + 'firebase-app-compat.js')
+    .then(function(){ return loadScript(FB_CDN + 'firebase-auth-compat.js'); })
+    .then(function(){ return loadScript(FB_CDN + 'firebase-database-compat.js'); })
     .then(function(){
       /* re-entrant: retryCloudInit() can land here again after a failed first attempt, and
          initializeApp throws on a duplicate default app */
       if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+      return signInAnon();
+    })
+    .then(function(){
       Store.ref = firebase.database().ref('luckytable/'+key);
       Store.mode = 'cloud';
       firebase.database().ref('.info/connected').on('value', function(s){
@@ -1641,7 +1705,14 @@ function initCloud(key){
       return new Promise(function(res){
         Store.ref.on('value', function(snap){
           var v = snap.val();
-          if (!v){ Store.ref.set(seedState()); return; }   // brand-new table: seed it
+          if (!v){
+            /* An unknown code used to silently seed a brand-new empty table, so a typo'd or
+               truncated invite link looked exactly like every place you saved being gone.
+               Creating a table is now a deliberate act with its own button. */
+            if (joinIntent === 'create'){ joinIntent = 'join'; Store.ref.set(seedState()); return; }
+            handleTableNotFound();
+            return;
+          }
           state = v;
           lsSet('lt-state', JSON.stringify(state));
           syncBanner();
@@ -4134,6 +4205,7 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('show');
    who-overlay and key-overlay are deliberately absent: identity and table code are
    required to use the app, so there is nothing sane to dismiss to. */
 var SHEET_X = {
+  'switch-overlay':   'switch-cancel',
   'home-overlay':     'home-skip',
   'add-overlay':      'add-cancel',
   'result-overlay':   'res-back',
@@ -4762,6 +4834,40 @@ document.getElementById('keysave').addEventListener('click', function(){
   location.reload();
 });
 
+/* Another table's invite link, opened while the app is already running. boot() has long
+   since finished and only the manual paste path reloads, so this used to do nothing at all —
+   the link appeared to be broken. Switching is offered, never assumed: the current table is
+   perfectly fine and its own link still works. Safe now that Wave 0.5 scopes device caches
+   per table, so nothing queued for one table can land in another. */
+var pendingSwitchCode = null;
+window.addEventListener('hashchange', function(){
+  var m = (location.hash || '').match(/k=([A-Za-z0-9_-]{8,})/);
+  if (!m) return;
+  var code = m[1];
+  if (code === localStorage.getItem('lt-key')) return;      // same table; nothing to ask
+  if (onboard.active) return;                               // the onboarding sheet owns this
+  pendingSwitchCode = code;
+  document.getElementById('switch-sub').textContent =
+    'That link opens a different table. Your current one stays exactly as it is — you can come back to it any time with its own link.';
+  document.getElementById('switch-overlay').classList.add('show');
+});
+document.getElementById('switch-overlay').addEventListener('click', function(ev){
+  if (ev.target.id === 'switch-overlay' || ev.target.closest('#switch-cancel')){
+    /* put the hash back so the URL keeps describing the table actually on screen */
+    var cur = localStorage.getItem('lt-key');
+    if (cur) location.hash = 'k=' + cur;
+    pendingSwitchCode = null;
+    closeOverlay('switch-overlay');
+    return;
+  }
+  if (ev.target.closest('#switch-go')){
+    if (!pendingSwitchCode) return;
+    localStorage.setItem('lt-key', pendingSwitchCode);
+    location.hash = 'k=' + pendingSwitchCode;
+    location.reload();                                      // simplest correct path: a clean boot on the new table
+  }
+});
+
 /* home overlay */
 var homeFlow = { token:'', timer:null };
 function openHome(){
@@ -4906,8 +5012,13 @@ function renderOnboard(){
   document.getElementById('ob-sub').textContent = OB_COPY[step].sub;
   var html = '';
   if (step === 'code'){
-    html = '<input class="keyinput" type="text" id="ob-code" placeholder="Paste link or code" autocomplete="off" autocapitalize="none" spellcheck="false">'
-         + '<div class="sheetbtns"><button class="primary" id="ob-codesave">Let&rsquo;s go</button></div>';
+    html = (tableMissing
+        ? '<div class="setnote bad" style="text-align:left; margin:0 0 12px">No table found for that code. '
+          + 'Check the link you were sent &mdash; codes are easy to truncate when they are pasted.</div>'
+        : '')
+         + '<input class="keyinput" type="text" id="ob-code" placeholder="Paste link or code" autocomplete="off" autocapitalize="none" spellcheck="false">'
+         + '<div class="sheetbtns"><button class="primary" id="ob-codesave">Let&rsquo;s go</button>'
+         +   '<button class="ghost" id="ob-create">Start a new table</button></div>';
   } else if (step === 'name'){
     var ids = memberIds();
     if (ids.length){
@@ -4940,6 +5051,17 @@ document.getElementById('onboard-overlay').addEventListener('click', function(ev
     if (onboard.i > 0){ onboard.i--; renderOnboard(); }
     return;
   }
+  if (ev.target.closest('#ob-create')){
+    var fresh = newTableCode();
+    joinIntent = 'create';
+    tableMissing = false;
+    localStorage.setItem('lt-key', fresh);
+    location.hash = 'k=' + fresh;
+    migrateScopedStorage(); scopeTouch();
+    toast('Creating your table…');
+    connectAndReady(fresh).then(function(){ render(); syncBanner(); onboardNext(); });
+    return;
+  }
   if (ev.target.closest('#ob-codesave')){
     var v = (document.getElementById('ob-code') || {}).value || '';
     var m = v.trim().match(/k=([A-Za-z0-9_-]{8,})/) || v.trim().match(/^([A-Za-z0-9_-]{8,})$/);
@@ -4947,6 +5069,7 @@ document.getElementById('onboard-overlay').addEventListener('click', function(ev
     localStorage.setItem('lt-key', m[1]);
     location.hash = 'k=' + m[1];
     migrateScopedStorage(); scopeTouch();            // the device caches have a table to belong to now
+    joinIntent = 'join'; tableMissing = false;
     toast('Joining…');
     connectAndReady(m[1]).then(function(){ render(); syncBanner(); onboardNext(); });
     return;
