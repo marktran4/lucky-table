@@ -126,6 +126,26 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 @keyframes skelpulse{0%,100%{opacity:1} 50%{opacity:.55}}
 @media (prefers-reduced-motion: reduce){ .railskel .railphoto,.railskel .railname,.railskel .railmeta{animation:none} }
 
+/* build mode: the first five saves, before there is anything to pick between */
+.buildhead{margin:16px 0 10px}
+.buildh{font-size:23px; font-weight:900; margin:0 0 5px; letter-spacing:-.3px}
+.buildsub{font-size:14px; font-weight:700; color:var(--muted); margin:0 0 14px; line-height:1.5}
+.buildbar{height:6px; background:var(--raised); border-radius:3px; overflow:hidden}
+.buildbar i{display:block; height:100%; background:var(--acc); border-radius:3px; transition:width .35s cubic-bezier(.2,.8,.3,1)}
+@media (prefers-reduced-motion: reduce){ .buildbar i{transition:none} }
+.buildcount{font-size:12px; font-weight:800; color:var(--muted); margin-top:7px; letter-spacing:.3px}
+/* one-tap save straight off a rail card. 44px clears the touch floor this file insists on;
+   the scrim keeps it legible over a bright photo. */
+.railsave{
+  position:absolute; top:8px; right:8px; z-index:2;
+  width:44px; height:44px; border-radius:50%;
+  background:rgba(10,10,10,.66); backdrop-filter:blur(6px);
+  color:#fff; font-size:23px; font-weight:900; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+}
+.railsave:active{background:var(--acc); color:#0A0A0A; transform:scale(.9)}
+.railsave.saved{background:var(--acc); color:#0A0A0A}
+
 /* filter chip bar — each chip opens a bottom sheet (Uber Eats pattern) */
 .filterbar{display:flex; gap:9px; margin:12px -18px 4px; padding:0 18px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
 .filterbar::-webkit-scrollbar{display:none}
@@ -2068,10 +2088,33 @@ function ensureRail(target, done){
     });
   })();
 }
+/* Should a fresh walk start? Extracted so the guard that stops the retry loop is testable.
+
+   THE LOOP IT PREVENTS: loadPopularRail() runs on every idle render, and used to reset
+   batch/dry unconditionally before calling ensureRail(). A failing fetch calls
+   rerenderIdleRail() -> renderSpin() -> loadPopularRail() again, which zeroed the very
+   counters railExhausted() reads — so the in-flight step() loop never terminated and fired
+   one billable Places call per iteration, indefinitely. Observed at 150+ calls in ten
+   seconds against a 403.
+
+   It is NOT a localhost-only fault: any state where the rail legitimately yields zero
+   eligible places reaches it — a quiet home point where nothing clears 4.5 stars and 300
+   reviews, an API outage, an exhausted quota, a revoked key. Exactly the runaway the
+   in-app call counter was built to notice, except the counter only reports it. */
+function railShouldWalk(){
+  if (!placesKeyReady() || !home()) return false;
+  if (popRail.filling) return false;                   // a walk is running: never touch its counters
+  if (popRail.day === railDay() && popRail.homeKey === homeKey()){
+    if (popRail.recs.length) return false;             // already have today's pool
+    if (railExhausted()) return false;                 // today's walk finished empty — don't start over
+  }
+  return true;
+}
 function loadPopularRail(){                            // idle-render hook: today's pool, from cache or one daily build
   if (!placesKeyReady() || !home()) return;
   var today = railDay(), hk = homeKey();
   if (popRail.day === today && popRail.homeKey === hk && popRail.recs.length){ loadPopPhotos(); return; }  // in memory already
+  if (!railShouldWalk()) return;
   var cached = popCacheRead();
   if (cached){                                        // today's pool built earlier (this or the other phone) — no API calls
     popRail.recs = cached; popRail.day = today; popRail.homeKey = hk; popRail.batch = 99; popRail.dry = 99;
@@ -2116,7 +2159,9 @@ function popularRail(){
      information is a glance away rather than lost. */
   var html = '<h2>Tonight&rsquo;s crowd-pleasers <small>near you · fresh daily</small></h2><div class="rail">';
   shown.forEach(function(r){
-    html += '<div class="railcard" data-poprail="'+esc(r.placeId)+'">' + photoHtml(r, 'railphoto')
+    html += '<div class="railcard" data-poprail="'+esc(r.placeId)+'">'
+      + photoHtml(r, 'railphoto').replace(/<\/div>$/,
+          '<button class="railsave" data-railsave="'+esc(r.placeId)+'" aria-label="Save '+esc(r.name)+'">+</button></div>')
       + '<div class="railname">'+esc(r.name)+'</div>'
       + '<div class="railmeta">&#9733; '+r.rating+' ('+r.ratingCount+') · '+priceLabel(r.priceLevel)+'</div></div>';
   });
@@ -2873,6 +2918,62 @@ function relaxAnswer(key){
   findNearby();
 }
 
+/* ==================== cold start: build mode ====================
+   The core loop needs something to pick BETWEEN, so a brand-new table cannot experience the
+   product at all — the primary button reads "0 places in the running" and the empty state
+   hands the work straight back ("Add a couple of places"). Build mode turns the first visit
+   into the thing the app is already good at: browsing crowd-pleasers nearby and tapping save.
+
+   ONE threshold, used by the copy, the progress bar and the unlock alike. An earlier draft
+   said "save 5" and unlocked at 3, which is two numbers on one screen. Five, because at three
+   every draw returns the identical three cards and the wheel is decorative — a worse first
+   impression than one more tap of saving. */
+var BUILD_TARGET = 5;
+function buildModeActive(){
+  /* Needs something to build FROM: with no Places key or no home point the rail is empty and
+     this would be a progress bar over nothing — that case gets "Set your area" instead.
+     An active filter also wins, so "nothing fits those filters" can still explain itself. */
+  return !anyFilterOn() && rawPoolSize() < BUILD_TARGET && placesKeyReady() && !!home();
+}
+function renderBuild(host){
+  var have = rawPoolSize(), pct = Math.round(have / BUILD_TARGET * 100);
+  var html = '<div class="buildhead">'
+    + '<div class="buildh">' + (have ? 'Keep going' : 'Build your table') + '</div>'
+    + '<div class="buildsub">Save ' + BUILD_TARGET + ' places you&rsquo;d actually eat at. '
+    +   'Then we can start picking between them.</div>'
+    + '<div class="buildbar"><i style="width:' + pct + '%"></i></div>'
+    + '<div class="buildcount">' + have + ' of ' + BUILD_TARGET + ' saved</div>'
+    + '</div>';
+  html += popularRail()
+    + '<button class="surprisebtn homebtn" id="buildadd">Add one by name'
+    +   '<span class="btnsub">If you already know somewhere</span></button>'
+    + somewhereNewBtnHtml();
+  host.innerHTML = html;
+  loadPopularRail();
+}
+/* Saving from the rail skips the result sheet entirely — in build mode the question is
+   "would we eat there", not "are we going tonight", and a sheet per save is four taps too
+   many. The card body still opens the sheet for anyone who wants the detail. */
+function saveFromRail(placeId){
+  var r = popRailRec(placeId);
+  if (!r) return;
+  if (placesArr().some(function(p){ return p.placeId && p.placeId === placeId; })){
+    toast('Already on your list');
+    return;
+  }
+  var before = rawPoolSize();
+  Store.patch({ ['places/'+uid()]: buildDiscoveryRec(r) });
+  /* count from `before`, not from a re-read: a cloud write echoes back asynchronously and
+     the milestone must fire exactly once, on the save that crosses it */
+  if (before + 1 === BUILD_TARGET){
+    confetti(true);
+    toast('That\u2019s ' + BUILD_TARGET + ' \u2014 you\u2019re ready to pick');
+  } else {
+    toast(r.name + ' saved');
+  }
+  renderSpin();
+}
+
 function renderSpin(){
   if (!state) return;
   /* hide the + FAB during the broad funnel so it can't sit on top of the sticky pick bar (CSS-gated to the spin tab) */
@@ -2884,14 +2985,23 @@ function renderSpin(){
   var n = poolCount();
   var host = document.getElementById('spinaction');
   if (document.getElementById('result-overlay').classList.contains('show')){
-    /* keep the surface underneath the result sheet in sync (funnel or options) */
-    (nearby.active ? renderDiscovery(host) : renderOptions(host)); return;
+    /* Keep the surface underneath the result sheet in sync, at the SAME precedence as the
+       branch below. It used to be a two-way funnel-or-options choice, which meant opening a
+       rail card in build mode and saving it painted a bare picks button behind the sheet —
+       a flash of the wrong screen, self-correcting on close but plainly wrong while visible. */
+    if (nearby.active) renderDiscovery(host);
+    else if (draw.active && draw.options.length) renderOptions(host);
+    else if (buildModeActive()) renderBuild(host);
+    else renderOptions(host);
+    return;
   }
 
   if (nearby.active){
     renderDiscovery(host);
   } else if (draw.active && draw.options.length){
     renderOptions(host);
+  } else if (buildModeActive()){
+    renderBuild(host);
   } else if (n === 0){
     renderRelaxation(host);
   } else {
@@ -2932,8 +3042,17 @@ function renderRelaxation(host){
   var railHtml = popularRail();
   /* raw pool = visited/blocked only, everything else off */
   var raw = placesArr().filter(function(p){ return !isBeen(p) && !p.blocked; }).length;
-  if (raw < 3){
-    host.innerHTML = '<div class="relax"><p>The list is running dry. Add a couple of places.</p>'
+  if (raw < BUILD_TARGET){
+    /* Reached only when build mode could NOT run. The usual reason is no home point — the
+       rail needs one, so without it a new table lands on an empty screen with no way forward.
+       Lead with the fix rather than restating the problem. Adding by name still works with no
+       home point and no Places key, and stays on offer either way. */
+    var needHome = !home();
+    host.innerHTML = '<div class="relax">'
+      + (needHome
+          ? '<p>Set your area and we&rsquo;ll show you places worth saving.</p>'
+            + '<button class="relaxchip" id="relax-home">Set your area</button>'
+          : '<p>The list is running dry. Add a couple of places.</p>')
       + '<button class="relaxchip" id="relax-add">Add a place</button>'
       + somewhereNewBtnHtml() + '</div>' + railHtml;
     loadPopularRail();
@@ -4059,6 +4178,11 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
   if (ev.target.closest('#nearbyretry')){ findNearby(); return; }
   if (ev.target.closest('#nearbyback')){ nearbyReset(); renderSpin(); return; }
   if (ev.target.closest('#nearbywiden')){ nearby.wide = true; findNearby(); return; }
+  if (ev.target.closest('#buildadd')){ openAdd(); return; }
+  if (ev.target.closest('#relax-home')){ openHome(); return; }
+  /* before the card-open handler below, or a save would also open the sheet */
+  var rsv = ev.target.closest('[data-railsave]');
+  if (rsv){ saveFromRail(rsv.dataset.railsave); return; }
   if (ev.target.closest('[data-railmore]')){ morePopular(); return; }
   var pc = ev.target.closest('[data-poprail]'); if (pc){ var pr = popRailRec(pc.dataset.poprail); if (pr) openResult({ src:'nearby', rec:pr, savedId:null }); return; }
   var rc = ev.target.closest('[data-rail]'); if (rc){ openResult({ src:'saved', id: rc.dataset.rail }); return; }
