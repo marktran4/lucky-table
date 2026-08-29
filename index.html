@@ -382,22 +382,35 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .seg{display:inline-flex; background:var(--raised); border-radius:99px; padding:3px; gap:2px}
 .seg button{padding:8px 18px; border-radius:99px; font-weight:800; font-size:13px; color:var(--muted)}
 .seg button.on{background:var(--ink); color:var(--bg)}
+/* Places rows are full-width photo cards (Mark, 2026-08-29): the photo is the card at the
+   same 3:2 / r16 tier as every other card-scale surface, with the text consolidated to ONE
+   non-wrapping line under the name so the listing's vertical cost is the photo plus ~40px,
+   never a growing stack of captions. The old two-line meta (byline, age caption) moved out
+   entirely -- both live in the detail sheet, which is one tap away. */
 .listcard{
-  background:none; overflow:hidden; display:flex; align-items:stretch; cursor:pointer;
-  border-bottom:1px solid var(--line);
+  background:none; display:flex; flex-direction:column; cursor:pointer;
+  padding:0 0 18px;
 }
-.listcard.been{opacity:.72}
-.listcard .photo{width:126px; min-width:126px; height:84px; border-radius:12px; overflow:hidden; align-self:center; margin:10px 0 10px 2px}
-.listcard .photo .ph-emoji{font-size:32px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
-.listbody{flex:1; min-width:0; padding:14px 12px; align-self:center}
-.listbody .name{font-weight:900; font-size:17px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.listbody .meta{font-size:12.5px; color:var(--muted); font-weight:700; margin-top:4px; line-height:1.5}
+/* Dim via filter + text opacity, never card opacity: the red swipe-to-remove layer sits
+   directly behind the photo now, and a translucent card face lets it bleed through at rest,
+   which reads as an error state. filter dims without creating transparency. */
+.listcard.been .photo{filter:brightness(.75) saturate(.8)}
+.listcard.been .listbody{opacity:.72}
+.listcard .photo{width:100%; min-width:0; height:auto; aspect-ratio:3/2; border-radius:16px; overflow:hidden; margin:0}
+.listcard .photo .ph-emoji{font-size:54px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
+.listbody{min-width:0; padding:8px 2px 0}
+.listbody .name{font-weight:800; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.listbody .meta{font-size:12.5px; color:var(--muted); font-weight:700; margin-top:3px; line-height:1.5;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .kidbadge{background:var(--basil-tint); color:var(--basil); border-radius:7px; padding:2px 7px; font-weight:800; font-size:11px}
 .blockedbadge{background:var(--tomato-tint); color:var(--tomato); border-radius:7px; padding:2px 7px; font-weight:800; font-size:11px}
-.listcard.blocked{opacity:.6}
+.listcard.blocked .photo{filter:brightness(.55) saturate(.45)}
+.listcard.blocked .listbody{opacity:.6}
 /* swipe-right to remove */
 .swipewrap{position:relative; overflow:hidden}
-.swipebg{position:absolute; inset:0; display:flex; align-items:center; padding-left:26px;
+/* bottom:inherit-ish: stop the red reveal at the text line -- a full-card flood on a card
+   this tall reads as an error state rather than an affordance */
+.swipebg{position:absolute; top:0; left:0; right:0; aspect-ratio:3/2; border-radius:16px; display:flex; align-items:center; padding-left:26px;
   background:var(--tomato); color:#fff; font-weight:900; font-size:15px; letter-spacing:.02em}
 .swipebg::before{content:'\2190\00a0\00a0'; font-size:17px}
 .swipewrap .listcard{position:relative; background:var(--bg); transition:transform .2s cubic-bezier(.2,.7,.3,1)}
@@ -3774,35 +3787,35 @@ function renderList(){
     return;
   }
   host.innerHTML = arr.map(function(p){
-    var meta1 = [];
-    if (p.cuisine) meta1.push(esc(p.cuisine));
-    meta1.push('<span class="pricebadge">'+priceLabel(p.priceLevel)+'</span>');
-    if (p.suburb) meta1.push(esc(p.suburb));
-    if (p.kidFriendly) meta1.push('<span class="kidbadge">kid-ok</span>');
-    if (p.star) meta1.push('<span class="starbadge">&#11088;</span>');
-    if (p.blocked) meta1.push('<span class="blockedbadge">ruled out</span>');
-    var byName = memberName(p.by);
-    var by = byName ? '<span class="byline" style="color:'+memberColor(p.by)+'">'+esc(byName)+'</span>' : '';
-    var meta2 = [];
-    if (by) meta2.push('by '+by);
+    /* ONE meta line, and it never wraps (CSS ellipsis), so a listing's height is fixed at
+       photo + name + line regardless of how much a place could say about itself. What
+       earned a slot: the Been tab leads with its verdict (that is the tab's whole point),
+       everything else is what a person scans a list of restaurants BY -- cuisine, price,
+       suburb -- plus the standing badges. The byline and the age caption moved to the
+       detail sheet only; "too much text under the photo" costs more than either is worth
+       in a feed (Mark, 2026-08-29). */
+    var meta = [];
     var n = visitCount(p);
     if (which === 'been'){
       var w = lastWorth(p);
-      meta2.push(w === true ? 'worth going back' : (w === false ? 'not again' : 'visited'));
-      if (n > 1) meta2.push(n + '&times;');
-    } else {
-      /* a revived place keeps its history visible even though it's back in the pool */
-      if (n) meta2.push('been ' + n + (n === 1 ? ' time' : ' times'));
-      var ac = ageCaption(p); if (ac) meta2.push(ac);
+      meta.push(w === true ? 'worth going back' : (w === false ? 'not again' : 'visited'));
+      if (n > 1) meta.push(n + '&times;');
+    } else if (n){
+      meta.push('been ' + n + (n === 1 ? ' time' : ' times'));   // a revived place keeps its history visible
     }
+    if (p.cuisine) meta.push(esc(p.cuisine));
+    meta.push('<span class="pricebadge">'+priceLabel(p.priceLevel)+'</span>');
+    if (p.suburb) meta.push(esc(p.suburb));
+    if (p.kidFriendly) meta.push('<span class="kidbadge">kid-ok</span>');
+    if (p.star) meta.push('<span class="starbadge">&#11088;</span>');
+    if (p.blocked) meta.push('<span class="blockedbadge">ruled out</span>');
     return '<div class="swipewrap" data-id="'+p.id+'">'
       + '<div class="swipebg" aria-hidden="true">Remove</div>'
       + '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'"'
       +   ' role="button" tabindex="0" aria-label="'+esc(p.name)+'">'
       + photoHtml(p, 'photo')
       + '<div class="listbody"><div class="name">'+esc(p.name)+'</div>'
-      + '<div class="meta">'+meta1.join('<span class="sep">·</span>')+'</div>'
-      + '<div class="meta">'+meta2.join('<span class="sep">·</span>')+'</div></div></div></div>';
+      + '<div class="meta">'+meta.join('<span class="sep">·</span>')+'</div></div></div></div>';
   }).join('');
 }
 
