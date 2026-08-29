@@ -293,7 +293,21 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .stagelabel{font-size:11px; font-weight:800; letter-spacing:.5px; color:var(--muted); text-align:center; margin:12px 0 8px; text-transform:uppercase}
 .surprisebtn{display:block; width:100%; margin-top:10px; background:var(--raised); color:var(--ink); font-size:16px; font-weight:900; border-radius:99px; padding:15px}
 .surprisebtn:active{transform:translateY(1px); background:var(--raised-hi)}
-.brlist{margin-top:4px; border-radius:var(--r-card); overflow:hidden; border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow)}
+/* Wave 11: the broad list is a stack of full-bleed photo cards, not a bordered table of
+   72px thumbnails. The photo is the thing being judged, so it gets the width. */
+.brlist{margin-top:8px; display:flex; flex-direction:column; gap:20px}
+.bcard{cursor:pointer; position:relative}
+.bphoto-wide{width:100%; aspect-ratio:16/10; border-radius:14px; overflow:hidden; background:var(--raised); position:relative}
+.bphoto-wide img{width:100%; height:100%; object-fit:cover; display:block}
+.bphoto-wide .ph-emoji{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:44px; background:linear-gradient(135deg,#1A1A1A,#12321E)}
+.bcard.sel .bphoto-wide{box-shadow:0 0 0 3px var(--acc)}
+.bcname{display:flex; align-items:flex-start; gap:10px; margin-top:10px}
+.bcard .name{flex:1; min-width:0; font-weight:800; font-size:17px; line-height:1.25}
+.bcard .meta{font-size:13px; color:var(--muted); font-weight:700; margin-top:3px}
+.bcard .rate{font-size:13px; font-weight:800; margin-top:3px}
+.bcard .rate .cnt{color:var(--muted); font-weight:700}
+.bctick{width:28px; min-width:28px; height:28px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:15px; background:rgba(0,0,0,.35)}
+.bcard.sel .bctick{background:var(--acc); border-color:var(--acc); animation:pop .15s cubic-bezier(.2,.7,.3,1.3) both}
 .brow{display:flex; align-items:center; gap:11px; padding:10px 13px; border-bottom:1px solid var(--line); cursor:pointer; transition:background .12s}
 .brow:last-child{border-bottom:none}
 .brow.sel{background:var(--acc-tint); box-shadow:inset 3px 0 0 var(--acc)}
@@ -1767,6 +1781,20 @@ function haversine(a, b){
   var h = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
   return 2*R*Math.asin(Math.min(1, Math.sqrt(h)));
 }
+/* Card labels (Wave 11). Distance is shown rather than a drive-time guess: one decimal under
+   10km, whole km beyond, because the x2.2 straight-line fudge does not deserve false precision
+   at range. Review count is parenthesised and thousands-separated, Uber-style; a count of zero
+   renders nothing at all, since "(0)" reads worse than silence. */
+function ratingCountLabel(n){
+  if (n == null || !(n > 0)) return '';
+  return '(' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ')';
+}
+function distanceLabel(p){
+  var h = home(); if (!h || p.lat == null) return null;
+  var km = haversine(h, { lat:p.lat, lng:p.lng });
+  if (km == null) return null;
+  return (km < 10 ? km.toFixed(1) : String(Math.round(km))) + ' km';
+}
 function driveMins(p){
   var h = home(); if (!h || p.lat == null) return null;
   var km = haversine(h, { lat:p.lat, lng:p.lng });
@@ -2577,19 +2605,24 @@ function renderBroad(host){
   nearby.broad.forEach(function(r){
     var sel = !!nearby.selected[r.placeId];
     var meta = [];
+    var dl = distanceLabel(r); if (dl) meta.push(dl);
     if (r.cuisine) meta.push(esc(r.cuisine));
-    meta.push('<span class="pricebadge">' + priceLabel(r.priceLevel) + '</span>');
+    if (r.priceLevel != null) meta.push(priceLabel(r.priceLevel));
     if (r.suburb) meta.push(esc(r.suburb));
-    var dm = driveMins(r); if (dm != null) meta.push(dm + ' min');
-    if (r.rating) meta.push('<span class="ratebadge">★ ' + r.rating + '</span>');
-    if (r.kidFriendly) meta.push('<span class="kidbadge">kid-ok</span>');
-    html += '<div class="brow' + (sel?' sel':'') + '" data-bpick="' + esc(r.placeId) + '"'
+    if (r.kidFriendly) meta.push('kid-ok');
+    var rate = '';
+    if (r.rating){
+      var cl = ratingCountLabel(r.ratingCount);
+      rate = '<div class="rate">\u2605 ' + r.rating + (cl ? ' <span class="cnt">' + cl + '</span>' : '') + '</div>';
+    }
+    html += '<div class="bcard' + (sel?' sel':'') + '" data-bpick="' + esc(r.placeId) + '"'
       + ' role="checkbox" tabindex="0" aria-checked="' + (sel?'true':'false') + '"'
       + ' aria-label="' + esc(r.name) + '">'
-      + photoHtml(r, 'bphoto')
-      + '<div class="brbody"><div class="name">' + esc(r.name) + '</div>'
-      + '<div class="meta">' + meta.join('<span class="sep">·</span>') + '</div></div>'
-      + '<div class="brtick">' + (sel?'✓':'') + '</div></div>';
+      + photoHtml(r, 'bphoto-wide')
+      + '<div class="bcname"><div class="name">' + esc(r.name) + '</div>'
+      + '<div class="bctick">' + (sel?'\u2713':'') + '</div></div>'
+      + '<div class="meta">' + meta.join(' \u00b7 ') + '</div>'
+      + rate + '</div>';
   });
   html += '</div>';
   /* a 1-2 row longlist means the filters are biting hard — offer the loosen path here
