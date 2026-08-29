@@ -2314,13 +2314,30 @@ function popularRail(){
   }
   return html + '</div>';
 }
-function nearbyIncludedTypes(){
+/* Google's `restaurant` type returns almost no cafes, bakeries or coffee shops: measured at
+   Mark's home point, one search returned 20 restaurants and exactly ONE daytime venue. His
+   table has saved 57 places, 44 of them daytime (17 bakery, 14 cafe, 4 pastry, 4 coffee,
+   3 sandwich, 2 deli) — so discovery was reliably offering the one category the table eats
+   least. `restaurant` does expand to its sub-types (italian_restaurant, thai_restaurant and
+   so on), it simply does not reach the daytime side of the type tree at all. */
+var DAYTIME_TYPES = ['cafe', 'bakery', 'coffee_shop'];
+/* Alternate the bundle by batch rather than searching both at once. A combined
+   restaurant+cafe+bakery request still returns only 20 rows, so the two categories compete
+   for the same slots; alternating gives a full 20 of each and the cold-open prefetch already
+   pulls more than one batch. An explicitly chosen cuisine is never diluted this way. */
+function nearbyIncludedTypes(batch){
   if (nearby.cuisineOverride) return [nearby.cuisineOverride];
   var keys = Object.keys(discA().cuisines);
-  if (!keys.length) return ['restaurant'];
-  var types = [];
-  for (var i=0;i<keys.length;i++){ var t = cuisineType(keys[i]); if (!t) return ['restaurant']; if (types.indexOf(t) === -1) types.push(t); }
-  return types;
+  if (keys.length){
+    var types = [];
+    for (var i=0;i<keys.length;i++){
+      var t = cuisineType(keys[i]);
+      if (!t){ types = null; break; }
+      if (types.indexOf(t) === -1) types.push(t);
+    }
+    if (types && types.length) return types;
+  }
+  return (batch % 2) ? DAYTIME_TYPES.slice() : ['restaurant'];
 }
 /* soft family filter (kid-ok badged, not required); hard 4-star gate; dedupe vs the saved list.
    Cuisine is filtered SERVER-side via includedPrimaryTypes — no client re-check (Google's label
@@ -2398,7 +2415,7 @@ function nearbyRank(batch){ return batch === 0 ? 'POPULARITY' : 'DISTANCE'; }
 function nearbyCenter(batch){ return jitterCenter(nearbyRadiusM(), batch, railDay() % 8); }
 function nearbyFetch(batch){
   return Places.nearby({
-    includedPrimaryTypes: nearbyIncludedTypes(),
+    includedPrimaryTypes: nearbyIncludedTypes(batch),
     excludedPrimaryTypes: ['fast_food_restaurant'],            // discovery is for new sit-down spots, not chains
     maxResultCount: 20,
     rankPreference: nearbyRank(batch),
