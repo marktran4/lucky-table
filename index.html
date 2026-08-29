@@ -694,6 +694,7 @@ textarea.txtinput{min-height:60px; resize:vertical}
 
   <!-- ===== LIST VIEW ===== -->
   <section class="view" id="view-list">
+    <div id="listpicks"></div>
     <div class="searchrow">
       <div class="searchwrap">
         <span class="sicon">&#128269;</span>
@@ -791,6 +792,17 @@ textarea.txtinput{min-height:60px; resize:vertical}
 </div>
 
 <!-- add overlay -->
+<div class="overlay" id="new-overlay">
+  <div class="sheet">
+    <h3>What are you after?</h3>
+    <div class="sheetbtns">
+      <button class="primary" id="new-surprise">Somewhere new<span class="btnsub">Answer four quick questions</span></button>
+      <button class="ghost" id="new-byname">Add a place by name<span class="btnsub">If you already know somewhere</span></button>
+      <button class="quiet" id="new-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="add-overlay">
   <div class="sheet">
     <h3>Add a place</h3>
@@ -3470,18 +3482,27 @@ function renderSpin(){
     /* A cuisine tile, and only the tile, emptied the pool. Relaxation is the wrong screen
        for that -- it talks about filters the user never opened and hides the tile row's own
        explanation. Stay home: each carousel says what it has, and the search card offers
-       the way out. No picks button, because there is nothing to draw between. */
-    host.innerHTML = mightLikeRail() + popularRail() + favouritesRail() + somewhereNewBtnHtml();
+       the way out. */
+    host.innerHTML = idleHomeHtml();
     loadPopularRail();
   } else {
-    /* Actions first, rails second. The rails are full-bleed rows of photos; sitting above
-       the primary button they pushed "draw 3 from your list" toward the fold and read as the
-       main event, which they aren't. Ordering settles that argument; the CSS below no longer
-       has to win it on font size. */
-    host.innerHTML = picksBtnHtml() + somewhereNewBtnHtml()
-      + mightLikeRail() + popularRail() + favouritesRail();
+    host.innerHTML = idleHomeHtml();
     loadPopularRail();
   }
+}
+/* The idle home surface: three carousels, nothing else.
+
+   Both of its old buttons have moved out. The picks button lives at the top of the Places
+   tab now -- that tab IS the saved list, which is exactly what a draw runs over, so the
+   action sits with its own data instead of competing with the browse rails. "Somewhere new"
+   moved into the + button, alongside "add by name": both are ways of putting a new place in
+   front of you, and one control for the pair beats two full-width buttons above the fold.
+
+   Kept as its own function because renderOptions() falls back to it. Calling renderSpin()
+   there instead would recurse forever behind an open result sheet, whose underlay branch
+   ends in renderOptions(). */
+function idleHomeHtml(){
+  return mightLikeRail() + popularRail() + favouritesRail();
 }
 /* True when the pool is empty ONLY because of the cuisine tile -- i.e. clearing it would
    bring places back. Keeps a browse tap off the "nothing fits those filters" screen. */
@@ -3490,7 +3511,7 @@ function tileOnlyEmpty(){
 }
 function renderOptions(host){
   var live = draw.options.map(function(id){ return place(id) ? id : null; }).filter(Boolean);
-  if (!live.length){ host.innerHTML = picksBtnHtml(); draw.active=false; return; }
+  if (!live.length){ draw.active = false; host.innerHTML = idleHomeHtml(); loadPopularRail(); return; }
   var html = '<div class="optlabel">Tap one, or let the wheel decide</div><div class="options">';
   live.forEach(function(id){
     var p = place(id);
@@ -3570,6 +3591,16 @@ function renderSortOptions(){
 }
 
 function renderList(){
+  /* The picks button, at the top of the tab that holds the list it draws from. It is a
+     saved-list action, so it belongs with the saved list -- and the Dine out tab is a
+     browse surface now, not a stack of buttons. Tapping it hands off to the Dine out tab,
+     because that is where the option cards and the wheel live; the draw itself is
+     untouched. */
+  /* Gated on rawPoolSize, not poolCount: a filter or a cuisine tile can legitimately take
+     the running count to zero, and the button's own subtitle says so. Hiding it there would
+     take away the control that explains the emptiness. With genuinely nothing saved there is
+     no draw to offer, and the Dine out tab is in build mode anyway. */
+  document.getElementById('listpicks').innerHTML = rawPoolSize() ? picksBtnHtml() : '';
   var seg = document.querySelector('#listseg button.on');
   var which = seg ? seg.dataset.seg : 'try';
   var arr = placesArr().filter(function(p){ return which === 'been' ? isBeen(p) : !isBeen(p); });
@@ -4580,6 +4611,7 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('show');
 var SHEET_X = {
   'switch-overlay':   'switch-cancel',
   'home-overlay':     'home-skip',
+  'new-overlay':      'new-cancel',
   'add-overlay':      'add-cancel',
   'result-overlay':   'res-back',
   'settings-overlay': 'set-close',
@@ -4749,7 +4781,28 @@ document.querySelector('nav').addEventListener('click', function(ev){
   document.body.dataset.tab = b.dataset.tab;
   if (b.dataset.tab === 'map') openMapTab();     // first paint is deferred until the tab is actually used
 });
-document.getElementById('fab').addEventListener('click', openAdd);
+/* The picks button now lives at the top of the Places tab. It hands off to Dine out,
+   because the option cards and the wheel render on that surface -- the draw is unchanged. */
+document.getElementById('view-list').addEventListener('click', function(ev){
+  if (!ev.target.closest('#findbtn')) return;
+  document.body.dataset.tab = 'spin';
+  findOptions();
+});
+
+/* The + is now the one door for "put a new place in front of me": discover somewhere, or
+   add one you already know. With no Places key there is only ever one of those, so the
+   sheet would be a pointless tap -- go straight to add-by-name, exactly as it used to. */
+document.getElementById('fab').addEventListener('click', function(){
+  if (!placesKeyReady()){ openAdd(); return; }
+  document.getElementById('new-overlay').classList.add('show');
+});
+document.getElementById('new-overlay').addEventListener('click', function(ev){
+  if (ev.target.id === 'new-overlay' || ev.target.closest('#new-cancel')){
+    closeOverlay('new-overlay'); return;
+  }
+  if (ev.target.closest('#new-surprise')){ closeOverlay('new-overlay'); openFlow(0); return; }
+  if (ev.target.closest('#new-byname')){ closeOverlay('new-overlay'); openAdd(); return; }
+});
 
 /* filter chips open their sheet */
 document.getElementById('view-spin').addEventListener('click', function(ev){
@@ -4780,7 +4833,9 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
   if (ev.target.closest('#chipsexpand')){ chipsExpanded = !chipsExpanded; renderFilters(); return; }
   var fc = ev.target.closest('[data-fs]'); if (fc){ openFilterSheet(fc.dataset.fs); return; }
   if (ev.target.closest('#clearfilters')){ clearAllFilters(); draw.active = false; nearby.active = false; renderSpin(); return; }
-  if (ev.target.closest('#findbtn')){ findOptions(); return; }
+  /* #findbtn no longer renders on this tab (it lives at the top of Places), but the build
+     and relaxation screens still offer Somewhere new inline -- those are dead-end states
+     whose whole job is a way forward, where a FAB is too quiet a signal. */
   if (ev.target.closest('#surprisebtn')){ openFlow(0); return; }
   var fstep = ev.target.closest('[data-flowstep]');
   if (fstep){ openFlow(flowStepIndex(fstep.dataset.flowstep)); return; }
