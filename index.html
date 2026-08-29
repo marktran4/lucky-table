@@ -925,6 +925,7 @@ var MIN_RATING = 4.0;                                // hard floor for Google di
    That cap is the cost control: every batch is a billable Nearby call. */
 var NEARBY_MAX = 30;                                 // page size in the broad stage
 var BROAD_MAX_PREFETCH = 3;                          // hard ceiling on Nearby calls per cold open
+var ANY_RADIUS_M = 20000;                            // "Any distance" ring; doubles to 40km on Search wider (Google caps at 50km)
 var ROULETTE = [
   ['Thai','thai_restaurant'], ['Vietnamese','vietnamese_restaurant'], ['Japanese','japanese_restaurant'],
   ['Korean','korean_restaurant'], ['Chinese','chinese_restaurant'],
@@ -2087,7 +2088,10 @@ var DISH_DICT = ['dumplings','dumpling','pho','ramen','pad thai','pad see ew','b
 function discA(){ return discAns || blankAnswers(); }
 function nearbyRadiusM(){
   var d = discA().dist;
-  var base = d === 'near' ? nearKm()*1000 : d === 'mid' ? midKm()*1000 : 10000;
+  /* "Any" is 20km, not 10 (Mark, 2026-08-29). It read as "no distance limit" while quietly
+     applying the same ring as "mid", so choosing Any changed nothing and the pool stayed
+     small. Search wider doubles it to 40km, still inside Google's 50km ceiling. */
+  var base = d === 'near' ? nearKm()*1000 : d === 'mid' ? midKm()*1000 : ANY_RADIUS_M;
   return nearby.wide ? base*2 : base;            // "Search wider" doubles the ring, session-local (never touches the saved dist pref)
 }
 /* Two entry points, two jobs. Jenny's Picks draws from the list you've built; Somewhere
