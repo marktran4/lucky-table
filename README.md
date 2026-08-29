@@ -20,19 +20,37 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   **Somewhere new**. Everything else sits below them. The first button carries
   **the table's own name for its picks** — "Our Picks" until someone renames it
   in Settings (this table calls it "Jenny's Picks").
-- Filter chips (Distance / Cuisine / Price / Rating /
-  More) open bottom sheets. **No filters are selected by default** (and none
-  carry over a reload), so the picks draw from the whole saved list —
-  seeded and manually added places alike; a **Clear all** chip appears at the
-  end of the row whenever any filter is active. The chips govern **the saved-list
-  picks only** — Somewhere new takes its constraints from the guided flow instead (see
-  below), so a chip you set for the saved list never silently narrows a Google
-  search. **Below ~8 places in the pool the whole row collapses** to a single
-  "Narrow it down" chip — six ways to shrink a list of five is noise. It expands
-  on tap for the rest of the session, and it is **always shown in full whenever a
-  filter is active**, however small the list, so the bar can never hide the reason
-  results look thin.
-- The **Tonight's crowd-pleasers** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
+- **The cuisine tile row** sits at the top of the Dine out tab: nine food categories
+  (Burgers, Thai, Wings, Coffee, Japanese, Bubble tea, Sandwiches, Vietnamese, Greek) as
+  pills you scroll sideways. **Single select** — tapping the lit one clears it. A tile
+  narrows *every carousel below it AND the picks draw*, so the row can never disagree with
+  what the button gives you. It is session-only, like the filters, and it is matched
+  locally against each place's cuisine label and name (word boundaries, not raw substrings
+  — "pho" must not match "photo"). **Selecting a tile never costs a Google call.**
+- **The three home carousels**, in this order under the two buttons:
+  **Places you might like** (your own saved want-to-try list, ordered by the same weighting
+  the draw uses — things you haven't been offered lately and have been waiting a while come
+  first), **Popular in your area** (the Google discovery rail, below), and **Your
+  favourites** (everything starred, places you've already been included, hidden entirely
+  when nothing is starred). Only the middle one talks to Google.
+- **Tile with nothing behind it:** the carousels say so rather than vanishing, and where
+  the tile maps to a real Google place type, the first rail ends with a **Find X near you**
+  card — the one and only tap that spends an API call on a tile, and it says so. Wings and
+  Bubble tea have no Places type, so they filter what you have and offer no search card.
+  A tile that empties your list does **not** bounce you to the "nothing fits those filters"
+  screen; you stay home and the rails explain themselves.
+- Filter chips (Distance / Cuisine / Price / Rating / More) still exist, now **behind the
+  ☰ Filters pill at the end of the tile row** — collapsed by default at every list size,
+  since the tile row owns the top of the screen. The pill carries a **count badge** when
+  any of them is on, and the row **opens itself automatically whenever a filter is active**,
+  so it can never hide the reason results look thin. **No filters are selected by default**
+  (and none carry over a reload), so the picks draw from the whole saved list — seeded and
+  manually added places alike; a **Clear all** chip appears at the end of the row whenever
+  any filter is active, and it drops the cuisine tile too. The chips govern **the
+  saved-list picks only** — Somewhere new takes its constraints from the guided flow
+  instead (see below), so a chip you set for the saved list never silently narrows a Google
+  search.
+- The **Popular in your area** rail (4.5★+, 300+ reviews) is a *discovery* suggestion —
   crowd-pleasers near your home point that you haven't saved yet, not places
   already on your list. It **rotates daily**: the day's pool of ~21 is fetched
   once and cached (in localStorage, by date + home point + table), then ordered by a
@@ -122,7 +140,7 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   tapping **Someone else** on the "who's on this phone?" step.
 - **A new table starts in build mode.** Below **five** saved places the Dine out tab is a
   progress screen, not a picker: "Build your table — save 5 places you'd actually eat at",
-  a progress bar, the crowd-pleasers rail, and *Add one by name*. Every rail card has a
+  a progress bar, the Popular in your area rail, and *Add one by name*. Every rail card has a
   one-tap **+** that saves it straight to the list with no sheet in between (the card body
   still opens the detail sheet). At five it celebrates and the normal home screen appears.
   Five is the single number used by the copy, the bar and the unlock alike — at three every
@@ -134,11 +152,11 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 - **First run is one sheet, not three.** Joining a table, saying who you are and
   setting a home point are three steps of a single flow, and only the ones actually
   missing are asked. Entering a code connects in place — no reload. The home step is
-  required here, because discovery and the crowd-pleasers rail both need it and
+  required here, because discovery and the Popular in your area rail both need it and
   skipping it strands a brand-new table on an empty screen; the same sheet opened
   later from Settings still has **Skip**. Adding a place by name never needs a home
   point or a Places key.
-- **A star** marks a favourite. `★ Favourites` on the Dine out filter bar draws only
+- **A star** marks a favourite. `★ Favourites` (behind the ☰ Filters pill) draws only
   from starred places; it clears with **Clear all** like every other filter, and it
   never silently weights the odds.
 - **Visits are a log, not a flag.** Each visit records a date, an optional 1-5
