@@ -34,11 +34,18 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   way forward, and a FAB is too quiet a signal there.
 - **The cuisine tile row** sits at the top of the Home tab: nine food categories
   (Burgers, Thai, Wings, Coffee, Japanese, Bubble tea, Sandwiches, Vietnamese, Greek) as
-  pills you scroll sideways. **Single select** — tapping the lit one clears it. A tile
-  narrows *every carousel below it AND the picks draw*, so the row can never disagree with
-  what the button gives you. It is session-only, like the filters, and it is matched
-  locally against each place's cuisine label and name (word boundaries, not raw substrings
-  — "pho" must not match "photo"). **Selecting a tile never costs a Google call.**
+  pills you scroll sideways. **Tapping a tile opens that cuisine's own page** (single
+  select — the lit tile, the ‹ Home link, or a Home re-tap closes it): your saved matches
+  first, want-to-try before been, then **Nearby** — a fresh-daily range from Google — then
+  a "More … nearby" door into the full discovery funnel. Matching against your list is
+  local and free (word boundaries against cuisine label + name — "pho" must not match
+  "photo"). The Nearby section costs **one Google call per cuisine per day**, cached like
+  the popular rail (by day + home point + table); reopening pages all day is free. It uses
+  discovery's 4.0★ floor, not the rail's 4.5/300 crowd-pleaser gate — a range beats a
+  pedigree parade. Wings and Bubble tea have no Google place type, so their pages are
+  saved-list-only and say so. Each Google find carries a one-tap **+** save; saving moves
+  the card up into your-list on the spot. While a page is open the tile also narrows the
+  picks draw, so Our Picks agrees with what you're looking at.
 - **The three home carousels**, in this order under the two buttons:
   **Places you might like** (your own saved want-to-try list, ordered by the same weighting
   the draw uses — things you haven't been offered lately and have been waiting a while come
