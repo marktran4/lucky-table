@@ -14,12 +14,24 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 
 ## How it works
 
-- **Dine out tab** is home. The **two entry points come first**, in this order:
-  **your picks** (the main feature, always the big accent button and always on
-  top — including when no Places key is set and it is the only one shown) and
-  **Somewhere new**. Everything else sits below them. The first button carries
-  **the table's own name for its picks** — "Our Picks" until someone renames it
-  in Settings (this table calls it "Jenny's Picks").
+- **Dine out tab** is home, and it is a **browse surface, not a stack of buttons**: the
+  cuisine tile row, then three carousels. Both of the old full-width entry points have
+  moved off it.
+- **Your picks now lives at the top of the Places tab** — the tab that holds the list a
+  draw actually runs over, so the action sits with its own data. The button carries **the
+  table's own name for its picks** — "Our Picks" until someone renames it in Settings (this
+  table calls it "Jenny's Picks") — and its subtitle is the live count in the running.
+  Tapping it **hands off to the Dine out tab**, because that is where the option cards and
+  the wheel render; the draw itself is unchanged. It is hidden only when nothing at all is
+  saved (the Dine out tab is in build mode then anyway) — a filter or cuisine tile taking
+  the count to zero still shows it, because it is the control that explains the emptiness.
+- **Somewhere new now lives in the + button**, alongside *Add a place by name*. Tapping +
+  opens a small sheet offering both: they are the two ways to put a new place in front of
+  you, and one control for the pair beats two full-width buttons above the fold. **With no
+  Places key there is only one of them**, so + skips the sheet and goes straight to
+  add-by-name, exactly as it always did. The **build** and **relaxation** screens still
+  offer Somewhere new as an inline button — those are dead-end states whose whole job is a
+  way forward, and a FAB is too quiet a signal there.
 - **The cuisine tile row** sits at the top of the Dine out tab: nine food categories
   (Burgers, Thai, Wings, Coffee, Japanese, Bubble tea, Sandwiches, Vietnamese, Greek) as
   pills you scroll sideways. **Single select** — tapping the lit one clears it. A tile
