@@ -168,6 +168,18 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   skipping it strands a brand-new table on an empty screen; the same sheet opened
   later from Settings still has **Skip**. Adding a place by name never needs a home
   point or a Places key.
+- **Photos repair themselves.** Google hands back a *signed, time-limited* photo URL, so a
+  place saved months ago eventually loses its picture and falls back to the cuisine emoji.
+  Saved places now also store `photoName` — the stable resource id — so a lapsed photo can
+  be re-resolved with a cheap Photo call instead of a full Details call. A card whose image
+  fails to load repairs itself on the spot, and any place on screen without a picture gets
+  one. **Places saved before this** have no `photoName`, so they cost one Details call each
+  to learn it; that path is rationed to 8 per session while browsing, one attempt per place,
+  and only for cards actually on screen. **Settings → Google Places API → Missing photos**
+  shows how many are left and how many lookups fixing them would cost, and *Fetch* lifts the
+  cap. A place added by name only has no Google record, so it keeps the emoji and costs
+  nothing.
+
 - **A star** marks a favourite. `★ Favourites` (behind the ☰ Filters pill) draws only
   from starred places; it clears with **Clear all** like every other filter, and it
   never silently weights the odds.
