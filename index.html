@@ -319,6 +319,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .brbody .meta{font-size:12px; color:var(--muted); font-weight:700; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .brtick{width:24px; min-width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:14px}
 .brow.sel .brtick{background:var(--acc); border-color:var(--acc); animation:pop .15s cubic-bezier(.2,.7,.3,1.3) both}
+.pickspace{height:calc(84px + env(safe-area-inset-bottom)); pointer-events:none}
 .pickbar{position:sticky; bottom:calc(96px + env(safe-area-inset-bottom)); margin-top:20px; background:rgba(22,22,22,.92); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:99px; padding:7px; box-shadow:var(--shadow-lift)}
 .pickrow{display:flex; align-items:center; gap:6px}
 .findbtn.slim,.surprisebtn.slim{flex:1; width:auto; margin:0; padding:13px 16px; font-size:15px; border-radius:99px}
@@ -917,7 +918,13 @@ function mealWindow(m){
 }
 var DEFAULT_NEAR = 4, DEFAULT_MID = 10;              // km ring thresholds (editable via settings)
 var MIN_RATING = 4.0;                                // hard floor for Google discovery (saved-list floor is ratingMin, user-set)
-var NEARBY_MAX = 15;                                 // rows shown in the broad stage
+/* One Nearby call returns at most 20, and the gates in nearbyFilter (already saved, outside
+   the ring, under the 4.0 floor) routinely cut that to ~10 -- which is what a single-batch
+   page actually looked like. A page of 30 therefore cannot come from one call. Cold discovery
+   keeps fetching until it has BROAD_MIN, or until it hits BROAD_MAX_PREFETCH.
+   That cap is the cost control: every batch is a billable Nearby call. */
+var NEARBY_MAX = 30;                                 // page size in the broad stage
+var BROAD_MAX_PREFETCH = 3;                          // hard ceiling on Nearby calls per cold open
 var ROULETTE = [
   ['Thai','thai_restaurant'], ['Vietnamese','vietnamese_restaurant'], ['Japanese','japanese_restaurant'],
   ['Korean','korean_restaurant'], ['Chinese','chinese_restaurant'],
@@ -2466,24 +2473,47 @@ function discover(fresh){
   nearby.loading = true; nearby.error = false; nearby.active = true; draw.active = false;
   renderDiscovery(document.getElementById('spinaction'));      // skeleton rows
   nearbyFetch(nearby.batch).then(function(recs){
-    nearby.loading = false; nearby.fetchedAt = Date.now(); nearby.raw = recs;
+    nearby.fetchedAt = Date.now(); nearby.raw = recs;
     mergeNearby(recs);
-    var unseen = nearby.pool.filter(function(r){ return !nearby.seen[r.placeId]; });
-    if (!unseen.length){
-      if (nearby.pool.length){                                 // nothing new this batch: recycle the pool so a tap still refreshes
-        nearby.seen = {};
-        unseen = nearby.pool.slice();
-        toast('Looped back through the best spots nearby.');
-      } else {                                                  // genuinely nothing (empty-state recovery: widen / clear cuisine)
-        nearby.stage = 'broad'; nearby.broad = [];
-        renderSpin(); return;
-      }
-    }
-    presentBroad(unseen);
+    /* Only a COLD open tops up. "Show more" reaching this is an explicit request for one
+       further batch, not a refill to a floor. */
+    if (cold) topUpBroad(); else { nearby.loading = false; finishBroad(); }
   }).catch(function(){
     nearby.loading = false; nearby.error = true;
     renderSpin();
   });
+}
+/* Keep pulling batches until the page can actually be filled, or the call budget runs out.
+   Stays in the loading state throughout so the skeleton covers it rather than the list
+   visibly growing under the user. */
+function topUpBroad(){
+  var unseen = nearby.pool.filter(function(r){ return !nearby.seen[r.placeId]; });
+  /* Target a FULL page, not a floor. Stopping at a floor of 20 would hand back a
+     two-thirds-empty page of 30 whenever the first batch happened to clear it. */
+  if (unseen.length >= NEARBY_MAX || nearby.batch + 1 >= BROAD_MAX_PREFETCH){
+    nearby.loading = false; finishBroad(); return;
+  }
+  nearby.batch = (nearby.batch || 0) + 1;
+  nearbyFetch(nearby.batch).then(function(recs){
+    nearby.raw = recs; mergeNearby(recs); topUpBroad();
+  }).catch(function(){
+    /* A failed top-up is not a failed search -- show what the earlier batches already found. */
+    nearby.loading = false; finishBroad();
+  });
+}
+function finishBroad(){
+  var unseen = nearby.pool.filter(function(r){ return !nearby.seen[r.placeId]; });
+  if (!unseen.length){
+    if (nearby.pool.length){                                   // nothing new: recycle so a tap still refreshes
+      nearby.seen = {};
+      unseen = nearby.pool.slice();
+      toast('Looped back through the best spots nearby.');
+    } else {                                                    // genuinely nothing (widen / clear cuisine)
+      nearby.stage = 'broad'; nearby.broad = [];
+      renderSpin(); return;
+    }
+  }
+  presentBroad(unseen);
 }
 function findNearby(){ discover(true); }                        // Let's OG / cuisine spin / retry
 function moreLocations(){ discover(false); }                    // fetch another billable batch
@@ -2660,6 +2690,10 @@ function renderBroad(host){
   /* One sticky row, one primary action, and an X. The old bar stacked a count line, two
      full-width buttons and a two-button quiet row over the content — four controls competing
      with the thing you were trying to look at. */
+  /* Dead space the sticky bar can rest over. Without it the bar pins 96px above the viewport
+     bottom and sits on top of a card -- permanently, on a list short enough not to scroll.
+     The spacer gives the bar somewhere to be that is not content. */
+  html += '<div class="pickspace"></div>';
   html += '<div class="pickbar"><div class="pickrow">';
   if (cnt >= 2) html += '<button class="findbtn slim" id="npickspin">Spin these ' + cnt + '</button>';
   else html += '<button class="surprisebtn slim" id="nauto">Surprise me</button>';
