@@ -424,6 +424,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
   width:58px; height:58px; border-radius:50%; background:var(--acc); color:#0A0A0A;
   font-size:30px; font-weight:900; box-shadow:0 4px 14px rgba(0,0,0,.5);
   display:flex; align-items:center; justify-content:center;
+  transition:transform .22s ease;
 }
 .fab:active{transform:translateY(2px)}
 body[data-tab="spin"].funnelbroad .fab{display:none}   /* keep the FAB off the sticky pick bar */
@@ -436,7 +437,16 @@ nav{
   background:rgba(10,10,10,.92); backdrop-filter:blur(10px);
   border-top:1px solid var(--line);
   padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+  transition:transform .22s ease;
 }
+/* Scrolling down tucks the bottom chrome away (Mark, 2026-08-29) -- on a feed of full-width
+   photo cards the bar and the + were eating the fold. Any upward scroll brings them back,
+   as does being near the top. transform, not display: the bar keeps its layout and its
+   backdrop stays warm, and translate is compositable so the slide never janks the feed.
+   The extra 20px past 100% clears the FAB's shadow; the nav's own height covers its inset. */
+body.chromeaway nav{transform:translateY(calc(100% + env(safe-area-inset-bottom)))}
+body.chromeaway .fab{transform:translateY(calc(158px + env(safe-area-inset-bottom)))}
+@media (prefers-reduced-motion: reduce){ nav, .fab{transition:none !important} }
 nav button{
   flex:1; max-width:160px; display:flex; flex-direction:column; align-items:center; gap:2px;
   font-size:11px; font-weight:800; color:var(--muted); border-radius:12px; padding:7px 0;
@@ -455,13 +465,9 @@ nav button .ico .pip,
 nav button .ico .bul{fill:currentColor; stroke:none}
 nav button .ico .pip{opacity:.55}
 nav button .ico .bul{opacity:.85}
-/* .pipx is the same idea for a STROKED detail -- the .pip rules above assume a filled one,
-   and steam has no fill. It inherits stroke:currentColor from .ico and only swaps colour. */
-nav button .ico .pipx{opacity:.6}
 body[data-tab="spin"] nav .t-spin .ico .pip,
 body[data-tab="list"] nav .t-list .ico .pip,
 body[data-tab="map"]  nav .t-map  .ico .pip{fill:var(--acc); opacity:1}
-body[data-tab="spin"] nav .t-spin .ico .pipx{stroke:var(--acc); opacity:1}
 body[data-tab="spin"] nav .t-spin, body[data-tab="list"] nav .t-list, body[data-tab="map"] nav .t-map{color:var(--ink); background:var(--raised)}
 
 /* overlays */
@@ -763,19 +769,18 @@ textarea.txtinput{min-height:60px; resize:vertical}
 <button class="fab" id="fab">+</button>
 
 <nav>
-  <!-- Dine out: a bowl with two wisps of steam, and the steam is the accent -- the active
-       tab is the one that's hot.
-
-       THREE earlier drafts died at 24px; recorded so nobody redraws them. A circle split
-       into three wedges was unmistakably the Mercedes-Benz star. A circle with a needle and
-       a top ticker was a stopwatch. A circle with one filled wedge -- conceptually the best
-       of them, a plate and a draw landing on a slice at once -- read as a pie chart, which
-       in a food app is the wrong kind of clever. In a tab bar legibility beats concept. -->
+  <!-- Home: a house whose door is the accent pip. The tab was "Dine out" (a steaming bowl)
+       until 2026-08-29, when Mark asked for a home button: this tab IS the home screen, so
+       it became one rather than gaining a duplicate fourth tab -- renamed, re-iconed, and
+       re-tapping it while already home resets any in-progress funnel or draw back to the
+       idle carousels (see the nav handler). The bowl's three dead predecessor drafts
+       (Mercedes star / stopwatch / pie chart) are recorded in git history at 758ee7e. -->
   <button class="t-spin" data-tab="spin">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M3.6 11.9h16.8a8.4 8.4 0 0 1-16.8 0Z"/>
-      <path class="pipx" d="M9.8 8.6c-1.3-1.1 1.3-2.2 0-3.3M14.2 8.6c-1.3-1.1 1.3-2.2 0-3.3"/>
-    </svg>Dine out</button>
+      <path d="M4 10.9 12 4.3l8 6.6"/>
+      <path d="M5.9 12.4v7h12.2v-7"/>
+      <rect class="pip" x="10.3" y="14.9" width="3.4" height="4.5" rx="1"/>
+    </svg>Home</button>
   <!-- Places: a list, because that tab IS a searchable, sortable list -- the geography
        lives one tab over. A pin here would have described the wrong screen. -->
   <button class="t-list" data-tab="list">
@@ -4955,9 +4960,42 @@ window.addEventListener('popstate', function(){
 /* ==================== events ==================== */
 document.querySelector('nav').addEventListener('click', function(ev){
   var b = ev.target.closest('button[data-tab]'); if (!b) return;
+  /* Home is a real home button: RE-tapping it while already home abandons whatever
+     transient surface is up (discovery funnel, drawn options) and returns to the idle
+     carousels, plus scrolls to the top. Only the re-tap does this -- switching BACK to
+     Home from another tab keeps an in-progress funnel, because leaving to check the list
+     mid-decision and returning is a real flow that must not cost the funnel's state
+     (fetched batches are billable). The tile and chip filters survive either way; they
+     are visible, deliberate state with their own clear affordances. */
+  if (b.dataset.tab === 'spin' && document.body.dataset.tab === 'spin'){
+    nearbyReset();
+    draw.active = false;
+    renderSpin();
+    window.scrollTo({ top: 0 });
+    return;
+  }
   document.body.dataset.tab = b.dataset.tab;
+  window.scrollTo({ top: 0 });                   // each tab starts at its top, like every phone app
   if (b.dataset.tab === 'map') openMapTab();     // first paint is deferred until the tab is actually used
 });
+/* ==================== bottom chrome hides on scroll ====================
+   Direction, not position: down past a small dead-band hides the tab bar and the +,
+   any up-tick shows them again, and near the very top they are always shown. The 12px
+   dead-band swallows iOS momentum jitter so the bar doesn't flicker mid-fling, and the
+   listener is passive so it can never stall the scroll itself. Negative scrollY (rubber
+   band) is clamped for the same reason. Tab switches call window.scrollTo(0), which lands
+   in the y < 40 branch and restores the chrome without special-casing. */
+(function(){
+  var lastY = 0;
+  window.addEventListener('scroll', function(){
+    var y = Math.max(0, window.scrollY || 0);
+    if (y < 40){ document.body.classList.remove('chromeaway'); lastY = y; return; }
+    if (Math.abs(y - lastY) < 12) return;
+    document.body.classList.toggle('chromeaway', y > lastY);
+    lastY = y;
+  }, { passive:true });
+})();
+
 /* The picks button now lives at the top of the Places tab. It hands off to Dine out,
    because the option cards and the wheel render on that surface -- the draw is unchanged. */
 document.getElementById('view-list').addEventListener('click', function(ev){
