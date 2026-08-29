@@ -424,7 +424,27 @@ nav button{
   flex:1; max-width:160px; display:flex; flex-direction:column; align-items:center; gap:2px;
   font-size:11px; font-weight:800; color:var(--muted); border-radius:12px; padding:7px 0;
 }
-nav button .ico{font-size:22px; line-height:1}
+/* Hand-drawn tab icons, replacing the three stock emoji. One visual language: a plate that
+   is also the draw wheel, the saved list, the map -- and each carries a single "pip" that
+   lights up accent green on the active tab, so the set reads as one family and the active
+   state has a colour cue on top of the label and the raised pill. currentColor everywhere
+   else, so the existing muted/ink tab colouring keeps working untouched. */
+nav button .ico{
+  width:24px; height:24px; display:block;
+  fill:none; stroke:currentColor; stroke-width:1.8;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+nav button .ico .pip,
+nav button .ico .bul{fill:currentColor; stroke:none}
+nav button .ico .pip{opacity:.55}
+nav button .ico .bul{opacity:.85}
+/* .pipx is the same idea for a STROKED detail -- the .pip rules above assume a filled one,
+   and steam has no fill. It inherits stroke:currentColor from .ico and only swaps colour. */
+nav button .ico .pipx{opacity:.6}
+body[data-tab="spin"] nav .t-spin .ico .pip,
+body[data-tab="list"] nav .t-list .ico .pip,
+body[data-tab="map"]  nav .t-map  .ico .pip{fill:var(--acc); opacity:1}
+body[data-tab="spin"] nav .t-spin .ico .pipx{stroke:var(--acc); opacity:1}
 body[data-tab="spin"] nav .t-spin, body[data-tab="list"] nav .t-list, body[data-tab="map"] nav .t-map{color:var(--ink); background:var(--raised)}
 
 /* overlays */
@@ -726,9 +746,35 @@ textarea.txtinput{min-height:60px; resize:vertical}
 <button class="fab" id="fab">+</button>
 
 <nav>
-  <button class="t-spin" data-tab="spin"><span class="ico">&#127869;</span>Dine out</button>
-  <button class="t-list" data-tab="list"><span class="ico">&#128205;</span>Places</button>
-  <button class="t-map" data-tab="map"><span class="ico">&#128506;</span>Map</button>
+  <!-- Dine out: a bowl with two wisps of steam, and the steam is the accent -- the active
+       tab is the one that's hot.
+
+       THREE earlier drafts died at 24px; recorded so nobody redraws them. A circle split
+       into three wedges was unmistakably the Mercedes-Benz star. A circle with a needle and
+       a top ticker was a stopwatch. A circle with one filled wedge -- conceptually the best
+       of them, a plate and a draw landing on a slice at once -- read as a pie chart, which
+       in a food app is the wrong kind of clever. In a tab bar legibility beats concept. -->
+  <button class="t-spin" data-tab="spin">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M3.6 11.9h16.8a8.4 8.4 0 0 1-16.8 0Z"/>
+      <path class="pipx" d="M9.8 8.6c-1.3-1.1 1.3-2.2 0-3.3M14.2 8.6c-1.3-1.1 1.3-2.2 0-3.3"/>
+    </svg>Dine out</button>
+  <!-- Places: a list, because that tab IS a searchable, sortable list -- the geography
+       lives one tab over. A pin here would have described the wrong screen. -->
+  <button class="t-list" data-tab="list">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M10.2 6.6h9M10.2 12h9M10.2 17.4h6"/>
+      <circle class="pip" cx="5.7" cy="6.6" r="1.8"/>
+      <circle class="bul" cx="5.7" cy="12" r="1.8"/>
+      <circle class="bul" cx="5.7" cy="17.4" r="1.8"/>
+    </svg>Places</button>
+  <!-- Map: a folded paper map, with the pip as the marker on the centre panel. -->
+  <button class="t-map" data-tab="map">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M9 4.8 3.6 6.9v12.3L9 17.1l6 2.1 5.4-2.1V4.8L15 6.9Z"/>
+      <path d="M9 4.8v12.3M15 6.9v12.3"/>
+      <circle class="pip" cx="12" cy="11.4" r="2"/>
+    </svg>Map</button>
 </nav>
 
 <!-- first-run onboarding: one sheet, one question per step -->
