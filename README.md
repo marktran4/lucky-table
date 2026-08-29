@@ -14,16 +14,16 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 
 ## How it works
 
-- **Dine out tab** is home, and it is a **browse surface, not a stack of buttons**: the
+- **Home tab** (renamed from Dine out, 2026-08-29) is exactly that, and it is a **browse surface, not a stack of buttons**: the
   cuisine tile row, then three carousels. Both of the old full-width entry points have
   moved off it.
 - **Your picks now lives at the top of the Places tab** — the tab that holds the list a
   draw actually runs over, so the action sits with its own data. The button carries **the
   table's own name for its picks** — "Our Picks" until someone renames it in Settings (this
   table calls it "Jenny's Picks") — and its subtitle is the live count in the running.
-  Tapping it **hands off to the Dine out tab**, because that is where the option cards and
+  Tapping it **hands off to the Home tab**, because that is where the option cards and
   the wheel render; the draw itself is unchanged. It is hidden only when nothing at all is
-  saved (the Dine out tab is in build mode then anyway) — a filter or cuisine tile taking
+  saved (the Home tab is in build mode then anyway) — a filter or cuisine tile taking
   the count to zero still shows it, because it is the control that explains the emptiness.
 - **Somewhere new now lives in the + button**, alongside *Add a place by name*. Tapping +
   opens a small sheet offering both: they are the two ways to put a new place in front of
@@ -32,7 +32,7 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   add-by-name, exactly as it always did. The **build** and **relaxation** screens still
   offer Somewhere new as an inline button — those are dead-end states whose whole job is a
   way forward, and a FAB is too quiet a signal there.
-- **The cuisine tile row** sits at the top of the Dine out tab: nine food categories
+- **The cuisine tile row** sits at the top of the Home tab: nine food categories
   (Burgers, Thai, Wings, Coffee, Japanese, Bubble tea, Sandwiches, Vietnamese, Greek) as
   pills you scroll sideways. **Single select** — tapping the lit one clears it. A tile
   narrows *every carousel below it AND the picks draw*, so the row can never disagree with
@@ -150,7 +150,7 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   bylines and visit logs use them. Records written before this still render, falling
   back to the original two names. A new person joins by opening the invite link and
   tapping **Someone else** on the "who's on this phone?" step.
-- **A new table starts in build mode.** Below **five** saved places the Dine out tab is a
+- **A new table starts in build mode.** Below **five** saved places the Home tab is a
   progress screen, not a picker: "Build your table — save 5 places you'd actually eat at",
   a progress bar, the Popular in your area rail, and *Add one by name*. Every rail card has a
   one-tap **+** that saves it straight to the list with no sheet in between (the card body
@@ -168,6 +168,12 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   skipping it strands a brand-new table on an empty screen; the same sheet opened
   later from Settings still has **Skip**. Adding a place by name never needs a home
   point or a Places key.
+- **The tab bar behaves like a phone app's.** Re-tapping **Home** while already home
+  abandons an in-progress discovery funnel or drawn set and returns to the idle carousels
+  (switching back from another tab does NOT — a half-fetched funnel is billable state).
+  Scrolling down hides the tab bar and the + button; any upward scroll, or being near the
+  top, brings them back.
+
 - **Photos repair themselves.** Google hands back a *signed, time-limited* photo URL, so a
   place saved months ago eventually loses its picture and falls back to the cuisine emoji.
   Saved places now also store `photoName` — the stable resource id — so a lapsed photo can
