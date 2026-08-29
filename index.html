@@ -188,6 +188,9 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
   background:var(--ink); color:var(--bg); border-radius:99px;
   font-size:11px; font-weight:900; padding:1px 6px; margin-left:1px;
 }
+.tileback{display:inline-flex; align-items:center; gap:4px; font-weight:800; font-size:14px;
+  color:var(--muted); padding:10px 2px 0}
+.tileback:active{color:var(--ink)}
 /* the empty/CTA card that closes a carousel with nothing (or little) in it */
 .railcta{
   width:264px; height:176px; border-radius:16px; background:var(--raised);
@@ -1407,7 +1410,7 @@ function mapDetails(d){
    unlikely: a patch journalled for A can only ever be read back under A, and switching back
    later still finds it. lt-key (which table this phone is on), lt-sort and the lt-api-*
    counters stay global — those are device facts, not table facts. */
-var STORE_SCOPED = ['lt-state', 'lt-pending', 'lt-poprail', 'lt-user'];
+var STORE_SCOPED = ['lt-state', 'lt-pending', 'lt-poprail', 'lt-tilepool', 'lt-user'];
 var SCOPE_MAX = 5;                      // how many tables' caches this device keeps
 var SCOPE_REG = 'lt-scopes';
 function scopeKey(base, key){
@@ -2559,6 +2562,98 @@ function loadPopPhotos(){                              // only pay for photos ac
     }).catch(function(){});
   });
 }
+/* ==================== cuisine pages (tile -> its own page) ====================
+   Tapping a cuisine tile now opens a PAGE for that cuisine (Mark, 2026-08-30) instead of
+   filtering the carousels in place: your saved matches, then a range of nearby options
+   from Google, then the door into the full discovery funnel.
+
+   Cost model is the rail's, deliberately: the Google section is ONE Nearby call per
+   cuisine per day, cached in localStorage by day + home point + table (lt-tilepool), so
+   reopening Thai all afternoon is free and nine tiles cost at most nine calls a day.
+   The gate is discovery's own floor (MIN_RATING), NOT the rail's 4.5/300 crowd-pleaser
+   gate -- a page whose job is "show me a range of Thai" earns breadth over pedigree.
+   Tiles with no Google type (Wings, Bubble tea -- see CUISINE_TILES) get a saved-only
+   page that says so, rather than a `restaurant` search dressed up as one. */
+var TILE_POOL_KEY = 'lt-tilepool';
+var TILE_POOL_MAX_SHOW = 14;
+var tilePool = {};                       // label -> { day, homeKey, recs, loading, error }
+
+function tilePoolCacheRead(){
+  try {
+    var c = JSON.parse(lsGet(TILE_POOL_KEY) || 'null');
+    return (c && typeof c === 'object') ? c : {};
+  } catch(e){ return {}; }
+}
+function tilePoolCacheWrite(){
+  var out = {};
+  Object.keys(tilePool).forEach(function(k){
+    var e = tilePool[k];
+    if (e && e.recs && e.recs.length) out[k] = { day:e.day, homeKey:e.homeKey, recs:e.recs };
+  });
+  lsSet(TILE_POOL_KEY, JSON.stringify(out));
+}
+function tilePoolEntry(label){
+  var e = tilePool[label];
+  if (e && e.day === railDay() && e.homeKey === homeKey()) return e;
+  var c = tilePoolCacheRead()[label];
+  if (c && c.day === railDay() && c.homeKey === homeKey()){
+    tilePool[label] = { day:c.day, homeKey:c.homeKey, recs:c.recs, loading:false, error:false };
+    return tilePool[label];
+  }
+  return null;
+}
+function loadTilePool(label){
+  var def = tileDef(label);
+  if (!def || !def[2] || !placesKeyReady() || !home()) return;      // no type / no key / no home: no Google section
+  if (tilePoolEntry(label)) { loadTilePhotos(label); return; }      // today's pool, from memory or cache
+  if (tilePool[label] && tilePool[label].loading) return;
+  var e = tilePool[label] = { day:railDay(), homeKey:homeKey(), recs:[], loading:true, error:false };
+  Places.nearby({
+    includedPrimaryTypes: [def[2]],
+    maxResultCount: 20,
+    rankPreference: 'POPULARITY',
+    languageCode:'en-AU', regionCode:'au',
+    locationRestriction: { circle:{ center:{ latitude:home().lat, longitude:home().lng }, radius: popRailRadiusM() } }
+  }).then(function(recs){
+    var saved = {}; placesArr().forEach(function(p){ if (p.placeId) saved[p.placeId] = true; });
+    var brands = {}, have = {};
+    e.recs = recs.filter(function(r){
+      if (!r.placeId || have[r.placeId] || saved[r.placeId] || isExcludedPlace(r)) return false;
+      if (!withinRing(r, popRailRadiusM())) return false;
+      if (r.rating == null || r.rating < MIN_RATING) return false;
+      var b = brandKey(r.name);
+      if (b && brands[b]) return false;
+      have[r.placeId] = true; if (b) brands[b] = true;
+      return true;
+    });
+    e.loading = false;
+    tilePoolCacheWrite();
+    if (tile === label){ renderSpin(); loadTilePhotos(label); }
+  }).catch(function(){
+    e.loading = false; e.error = true;
+    if (tile === label) renderSpin();
+  });
+}
+function loadTilePhotos(label){
+  if (!placesKeyReady()) return;
+  var e = tilePoolEntry(label);
+  if (!e) return;
+  e.recs.slice(0, TILE_POOL_MAX_SHOW).forEach(function(r){
+    if (r.photoUri || !r.photoName) return;
+    Places.photo(r.photoName).then(function(uri){
+      r.photoUri = uri;
+      tilePoolCacheWrite();
+      if (tile === label) renderSpin();
+    }).catch(function(){});
+  });
+}
+function tilePoolRec(label, placeId){
+  var e = tilePoolEntry(label);
+  if (!e) return null;
+  for (var i=0;i<e.recs.length;i++){ if (e.recs[i].placeId === placeId) return e.recs[i]; }
+  return null;
+}
+
 /* ==================== home carousels ====================
    Three rails, in this order, all of them narrowed by the active cuisine tile:
 
@@ -3631,6 +3726,7 @@ function renderSpin(){
        a flash of the wrong screen, self-correcting on close but plainly wrong while visible. */
     if (nearby.active) renderDiscovery(host);
     else if (draw.active && draw.options.length) renderOptions(host);
+    else if (tile) renderTilePage(host);
     else if (buildModeActive()) renderBuild(host);
     else renderOptions(host);
     return;
@@ -3640,17 +3736,14 @@ function renderSpin(){
     renderDiscovery(host);
   } else if (draw.active && draw.options.length){
     renderOptions(host);
+  } else if (tile){
+    /* A set tile now MEANS the cuisine page -- before build mode on purpose, so a brand-new
+       table can browse Thai nearby before it has saved a thing. */
+    renderTilePage(host);
   } else if (buildModeActive()){
     renderBuild(host);
-  } else if (n === 0 && !tileOnlyEmpty()){
-    renderRelaxation(host);
   } else if (n === 0){
-    /* A cuisine tile, and only the tile, emptied the pool. Relaxation is the wrong screen
-       for that -- it talks about filters the user never opened and hides the tile row's own
-       explanation. Stay home: each carousel says what it has, and the search card offers
-       the way out. */
-    host.innerHTML = idleHomeHtml();
-    loadPopularRail();
+    renderRelaxation(host);
   } else {
     host.innerHTML = idleHomeHtml();
     loadPopularRail();
@@ -3670,10 +3763,77 @@ function renderSpin(){
 function idleHomeHtml(){
   return mightLikeRail() + popularRail() + favouritesRail();
 }
-/* True when the pool is empty ONLY because of the cuisine tile -- i.e. clearing it would
-   bring places back. Keeps a browse tap off the "nothing fits those filters" screen. */
-function tileOnlyEmpty(){
-  return !!tile && computePool({ ignoreTile:true }).length > 0;
+/* The cuisine page. Full-width cards in the Places-tab pattern -- saved places open the
+   result sheet through the existing [data-rail] delegate; Google finds carry a one-tap
+   save. The rails' own tileMatch filtering still exists above this and is now mostly
+   idle defence: while a tile is set, THIS page is what renders. */
+function tilePageCard(p){
+  var bits = [];
+  if (p.rating) bits.push('\u2605 ' + p.rating + (p.ratingCount ? ' (' + p.ratingCount + ')' : ''));
+  bits.push(priceLabel(p.priceLevel));
+  if (p.suburb) bits.push(esc(p.suburb));
+  if (p.star) bits.push('<span class="starbadge">&#11088;</span>');
+  return '<div class="listcard' + (isBeen(p) ? ' been' : '') + '" data-rail="' + esc(p.id) + '"'
+    + ' role="button" tabindex="0" aria-label="' + esc(p.name) + '">'
+    + photoHtml(p, 'photo')
+    + '<div class="listbody"><div class="name">' + esc(p.name) + '</div>'
+    + '<div class="meta">' + bits.join('<span class="sep">\u00b7</span>') + '</div></div></div>';
+}
+function tilePageFindCard(r){
+  var bits = [];
+  if (r.rating) bits.push('\u2605 ' + r.rating + (r.ratingCount ? ' (' + r.ratingCount + ')' : ''));
+  bits.push(priceLabel(r.priceLevel));
+  if (r.suburb) bits.push(esc(r.suburb));
+  return '<div class="listcard" data-tilerec="' + esc(r.placeId) + '"'
+    + ' role="button" tabindex="0" aria-label="' + esc(r.name) + '">'
+    + photoHtml(r, 'photo').replace(/<\/div>$/,
+        '<button class="railsave" data-tilesave="' + esc(r.placeId) + '" aria-label="Save ' + esc(r.name) + '">+</button></div>')
+    + '<div class="listbody"><div class="name">' + esc(r.name) + '</div>'
+    + '<div class="meta">' + bits.join('<span class="sep">\u00b7</span>') + '</div></div></div>';
+}
+function renderTilePage(host){
+  var def = tileDef(tile);
+  var mine = placesArr().filter(function(p){
+    return !p.blocked && !isExcludedPlace(p) && tileMatch(tile, p);
+  });
+  /* want-to-try first, then been -- same card, the .been dim carries the difference */
+  mine.sort(function(a, b){
+    var d = (isBeen(a) ? 1 : 0) - (isBeen(b) ? 1 : 0);
+    return d !== 0 ? d : (b.rating || 0) - (a.rating || 0) || strCmp(a.name, b.name);
+  });
+  fillPhotos(mine.slice(0, 12));
+
+  var html = '<button class="tileback" id="tileback">&#8249; Home</button>'
+    + '<h2>' + (def ? '<span aria-hidden="true">' + def[1] + '</span> ' : '') + esc(tile)
+    + ' <small>' + mine.length + ' on your list</small></h2>';
+  html += mine.length ? mine.map(tilePageCard).join('') : tileNote('on your list yet');
+
+  if (def && def[2] && placesKeyReady() && home()){
+    var e = tilePoolEntry(tile);
+    var recs = e ? e.recs.filter(function(r){
+      return !placesArr().some(function(p){ return p.placeId === r.placeId; });
+    }) : [];
+    html += '<h2>Nearby <small>' + esc(tile).toLowerCase() + ' \u00b7 fresh daily</small></h2>';
+    if (recs.length){
+      var shown = recs.slice(0, TILE_POOL_MAX_SHOW);
+      markSeen(shown.map(function(r){ return r.placeId; }));
+      html += shown.map(tilePageFindCard).join('');
+    } else if (!e || e.loading){
+      html += '<div class="railnone">Finding spots\u2026</div>';
+    } else if (e.error){
+      html += '<div class="railnone">Google search failed \u2014 try again later.</div>';
+    } else {
+      html += tileNote('nearby today');
+    }
+    html += '<button class="surprisebtn homebtn" id="tilemore">More ' + esc(tile).toLowerCase() + ' nearby'
+      + '<span class="btnsub">Runs the full search \u00b7 uses Google</span></button>';
+  } else if (def && !def[2]){
+    /* Wings / Bubble tea: no Places type -- see CUISINE_TILES for why guessing one is worse */
+    html += '<div class="railnone">Google can\u2019t filter ' + esc(tile).toLowerCase()
+      + ' as a category, so this page is your own list. Somewhere new (the + button) can still hunt.</div>';
+  }
+  host.innerHTML = html;
+  loadTilePool(tile);
 }
 function renderOptions(host){
   var live = draw.options.map(function(id){ return place(id) ? id : null; }).filter(Boolean);
@@ -3722,7 +3882,6 @@ function renderRelaxation(host){
   }
   /* try dropping each active filter individually, pick the one that recovers the most */
   var tries = [];
-  if (tile) tries.push({ key:'tile', label:'Clear ' + tile, n:computePool({ignoreTile:true}).length });
   if (mealOn) tries.push({ key:'meal', label:'Turn off '+mealVerb()+' hours', n:computePool({ignoreMeal:true}).length });
   if (openNow) tries.push({ key:'open', label:'Turn off Open now', n:computePool({ignoreOpenNow:true}).length });
   if (ratingMin > 0) tries.push({ key:'rating', label:'Include lower-rated', n:computePool({ignoreRating:true}).length });
@@ -4970,6 +5129,7 @@ document.querySelector('nav').addEventListener('click', function(ev){
   if (b.dataset.tab === 'spin' && document.body.dataset.tab === 'spin'){
     nearbyReset();
     draw.active = false;
+    tile = null;                                 // a cuisine page is transient too; Home means home
     renderSpin();
     window.scrollTo({ top: 0 });
     return;
@@ -5034,6 +5194,26 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
     renderSpin();
     return;
   }
+  if (ev.target.closest('#tileback')){ tile = null; renderSpin(); window.scrollTo({ top: 0 }); return; }
+  /* deliberate handoff into the full funnel; setDiscCuisineOverride keeps summary + search in step */
+  if (ev.target.closest('#tilemore')){
+    var tdef2 = tile && tileDef(tile);
+    if (tdef2 && tdef2[2]){ nearby.wide = false; setDiscCuisineOverride(tdef2[2]); findNearby(); }
+    return;
+  }
+  var tsv = ev.target.closest('[data-tilesave]');
+  if (tsv){
+    var trec = tilePoolRec(tile, tsv.dataset.tilesave);
+    if (trec){
+      if (placesArr().some(function(p){ return p.placeId === trec.placeId; })){ toast('Already on your list'); return; }
+      Store.patch({ ['places/'+uid()]: buildDiscoveryRec(trec) });
+      toast(trec.name + ' saved');
+      renderSpin();                       // the card moves from Nearby up into your-list
+    }
+    return;
+  }
+  var trc = ev.target.closest('[data-tilerec]');
+  if (trc){ var tr2 = tilePoolRec(tile, trc.dataset.tilerec); if (tr2) openResult({ src:'nearby', rec:tr2, savedId:null }); return; }
   /* The only place a tile spends money, and it takes a deliberate tap on a card that says so. */
   var tsc = ev.target.closest('[data-tilesearch]');
   if (tsc){
@@ -5090,7 +5270,6 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
     else if (k === 'dist'){ dist = 'any'; }
     else if (k === 'cuisine') cuisines = {};
     else if (k === 'price') prices = {};
-    else if (k === 'tile') tile = null;
     findOptions(); return;
   }
   if (ev.target.closest('#relax-clear')){
