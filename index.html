@@ -319,11 +319,14 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .brbody .meta{font-size:12px; color:var(--muted); font-weight:700; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .brtick{width:24px; min-width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:14px}
 .brow.sel .brtick{background:var(--acc); border-color:var(--acc); animation:pop .15s cubic-bezier(.2,.7,.3,1.3) both}
-.pickbar{position:sticky; bottom:calc(96px + env(safe-area-inset-bottom)); margin-top:14px; background:rgba(22,22,22,.96); backdrop-filter:blur(8px); border:1px solid var(--line); border-radius:16px; padding:12px; box-shadow:var(--shadow-lift)}
-.pickcount{text-align:center; font-size:12.5px; font-weight:800; color:var(--muted); margin-bottom:8px}
-.pickquiet{display:flex; justify-content:space-between; margin-top:8px}
-.pickquiet button{color:var(--ink); opacity:.82; font-weight:800; font-size:13.5px; padding:13px 12px; min-height:44px; border-radius:99px; transition:background .12s ease}
-.pickquiet button:active{opacity:1; background:var(--raised)}
+.pickbar{position:sticky; bottom:calc(96px + env(safe-area-inset-bottom)); margin-top:20px; background:rgba(22,22,22,.92); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:99px; padding:7px; box-shadow:var(--shadow-lift)}
+.pickrow{display:flex; align-items:center; gap:6px}
+.findbtn.slim,.surprisebtn.slim{flex:1; width:auto; margin:0; padding:13px 16px; font-size:15px; border-radius:99px}
+.pickx{width:44px; min-width:44px; height:44px; border-radius:50%; color:var(--ink); opacity:.65; font-size:15px; font-weight:900; display:flex; align-items:center; justify-content:center}
+.pickx:active{opacity:1; background:var(--raised)}
+.showmore{display:block; width:100%; margin-top:24px; background:var(--raised); color:var(--ink); font-size:15px; font-weight:800; border-radius:99px; padding:15px; min-height:44px}
+.showmore:active{background:var(--raised-hi)}
+.pickcount{text-align:center; font-size:12px; font-weight:800; color:var(--muted); margin-top:6px; margin-bottom:2px}
 .skelrow{height:52px; border-radius:12px; margin:8px 0; background:linear-gradient(90deg,#1C1C1C 25%,#262626 37%,#1C1C1C 63%); background-size:400% 100%; animation:shimmer 1.4s infinite}
 @keyframes shimmer{0%{background-position:100% 0} 100%{background-position:-100% 0}}
 @media (prefers-reduced-motion: reduce){ .skelrow{animation:none} .brow.sel .brtick{animation:none} }
@@ -1311,7 +1314,7 @@ function activeSort(){
 var draw = { active:false, options:[], firstSet:[], reshuffleUsed:false, pick:null };
 /* discovery session — the suggest funnel. stage 'broad' (up to 15 rows) -> 'final' (3 cards -> wheel) */
 var nearby = { active:false, loading:false, error:false, stage:'broad', wide:false,
-  raw:[], pool:[], broad:[], selected:{}, final:[], shown:{}, seen:{}, batch:0, sig:null,
+  raw:[], pool:[], broad:[], cands:[], selected:{}, final:[], shown:{}, seen:{}, batch:0, sig:null,
   fetchedAt:0, cuisineOverride:null };
 
 /* ==================== app state (synced) ==================== */
@@ -2402,25 +2405,41 @@ function mergeNearby(recs){
     have[r.placeId] = true; if (b) brands[b] = true; nearby.pool.push(r);
   });
 }
-function presentBroad(unseen){
-  nearby.shown = {};
-  /* Don't re-offer what the rail is already showing on the same home screen — but only
-     while there are enough alternatives to fill the list without it. */
+/* The whole ranked candidate list, computed once. Pages are sliced off it, so "Show more"
+   extends the list instead of resampling a different fifteen — you never lose the card you
+   were looking at. Ordering: places the rail is not already showing, then unseen before
+   previously-seen. Seen places are DEMOTED, never filtered, so the list cannot run dry. */
+function broadCandidates(unseen){
   var railIds = {};
   popRail.recs.forEach(function(r){ if (r.placeId) railIds[r.placeId] = true; });
   var offRail = unseen.filter(function(r){ return !railIds[r.placeId]; });
   if (offRail.length >= NEARBY_MAX) unseen = offRail;
-  /* Prefer places this device hasn't shown in the last 30 days. A soft preference, not a
-     filter: if there aren't enough fresh ones, previously-seen places fill the rest. */
   var ledger = seenRead();
   var fresh = unseen.filter(function(r){ return !ledger[r.placeId]; });
-  nearby.broad = sample(fresh, NEARBY_MAX);
-  if (nearby.broad.length < NEARBY_MAX){
-    var rest = unseen.filter(function(r){ return ledger[r.placeId]; });
-    nearby.broad = nearby.broad.concat(sample(rest, NEARBY_MAX - nearby.broad.length));
-  }
-  nearby.broad.forEach(function(r){ nearby.seen[r.placeId] = true; nearby.shown[r.placeId] = true; });
-  markSeen(nearby.broad.map(function(r){ return r.placeId; }));
+  var rest  = unseen.filter(function(r){ return  ledger[r.placeId]; });
+  return sample(fresh, fresh.length).concat(sample(rest, rest.length));
+}
+function markShown(list){
+  list.forEach(function(r){ nearby.seen[r.placeId] = true; nearby.shown[r.placeId] = true; });
+  markSeen(list.map(function(r){ return r.placeId; }));
+}
+function moreBroadAvailable(){
+  return (nearby.cands || []).length > nearby.broad.length || !nearby.wide;
+}
+/* Append the next page. Only when the fetched pool is genuinely exhausted does this reach
+   for another billable batch. */
+function showMoreBroad(){
+  var next = (nearby.cands || []).slice(nearby.broad.length, nearby.broad.length + NEARBY_MAX);
+  if (!next.length){ moreLocations(); return; }
+  nearby.broad = nearby.broad.concat(next);
+  markShown(next);
+  renderSpin(); loadBroadPhotos();
+}
+function presentBroad(unseen){
+  nearby.shown = {};
+  nearby.cands = broadCandidates(unseen);
+  nearby.broad = nearby.cands.slice(0, NEARBY_MAX);
+  markShown(nearby.broad);
   nearby.selected = {};
   if (nearby.batch === 0 && nearby.pool.length && nearby.pool.length <= 3){   // tiny pool: skip the shortlist, go to the wheel set
     nearby.final = nearby.broad.slice();
@@ -2635,11 +2654,17 @@ function renderBroad(host){
       + (!nearby.wide ? '<button class="relaxchip" id="nearbywiden">Search wider</button>' : '')
       + '</div>';
   }
-  html += '<div class="pickbar">';
-  html += '<div class="pickcount">' + (cnt ? cnt + ' of 3 picked' : 'Pick up to 3, or let it choose') + '</div>';
-  if (cnt >= 2) html += '<button class="findbtn" id="npickspin">Spin these ' + cnt + '</button>';
-  html += '<button class="surprisebtn" id="nauto">Surprise me — pick 3</button>';
-  html += '<div class="pickquiet"><button id="nmore15">show a different 15</button><button id="nearbyback">back to your list</button></div>';
+  /* Show more extends the list; it sits with the list, not in the sticky bar. */
+  if (moreBroadAvailable()) html += '<button class="showmore" id="nmorebroad">Show more</button>';
+  /* One sticky row, one primary action, and an X. The old bar stacked a count line, two
+     full-width buttons and a two-button quiet row over the content — four controls competing
+     with the thing you were trying to look at. */
+  html += '<div class="pickbar"><div class="pickrow">';
+  if (cnt >= 2) html += '<button class="findbtn slim" id="npickspin">Spin these ' + cnt + '</button>';
+  else html += '<button class="surprisebtn slim" id="nauto">Surprise me</button>';
+  html += '<button class="pickx" id="nearbyback" aria-label="Back to your list">\u2715</button>';
+  html += '</div>';
+  if (cnt) html += '<div class="pickcount">' + cnt + ' of 3 picked</div>';
   html += '</div>';
   host.innerHTML = html;
 }
@@ -4434,7 +4459,7 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
   var bpick = ev.target.closest('[data-bpick]'); if (bpick){ toggleBroadPick(bpick.dataset.bpick); return; }
   if (ev.target.closest('#npickspin')){ goFinal(selectedRecs()); spinFinalWheel(); return; }
   if (ev.target.closest('#nauto')){ autoPickThree(); return; }
-  if (ev.target.closest('#nmore15')){ moreLocations(); return; }
+  if (ev.target.closest('#nmorebroad')){ showMoreBroad(); return; }
   var dr = ev.target.closest('[data-drelax]'); if (dr){ relaxAnswer(dr.dataset.drelax); return; }
   if (ev.target.closest('#nflowedit')){ openFlow(0); return; }
   /* discovery: final stage */
