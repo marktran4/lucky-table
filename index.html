@@ -2452,7 +2452,8 @@ function presentBroad(unseen){
 }
 /* fresh=true: a new search (Let's OG / cuisine / widen). Cold-starts only when the search
    signature changed or the pool is empty; otherwise it advances to the next batch so repeat
-   taps keep surfacing new spots. fresh=false is "show a different 15" — always advance. */
+   taps keep surfacing new spots. fresh=false means "fetch another batch" — always advance.
+   Reached from showMoreBroad only once the already-fetched pool is exhausted. */
 function discover(fresh){
   if (nearby.loading) return;
   if (!placesKeyReady()) return;
@@ -2485,7 +2486,7 @@ function discover(fresh){
   });
 }
 function findNearby(){ discover(true); }                        // Let's OG / cuisine spin / retry
-function moreLocations(){ discover(false); }                    // "show a different 15"
+function moreLocations(){ discover(false); }                    // fetch another billable batch
 function toggleBroadPick(pid){
   if (nearby.selected[pid]){ delete nearby.selected[pid]; }
   else {
