@@ -99,6 +99,21 @@ body[data-tab="spin"] #view-spin, body[data-tab="list"] #view-list, body[data-ta
 h2{font-size:17px; font-weight:900; margin:16px 0 10px}
 h2 small{font-weight:700; color:var(--muted); font-size:12px}
 
+/* Current set location, pinned above the rails. It used to be visible only in Settings,
+   so checking what "near" was measured from took a dig through the gear menu. The whole
+   bar is one button into the same "Where's home?" sheet Settings uses. */
+.homebar{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  background:var(--raised); border-radius:12px; padding:10px 12px; margin:12px 0 0;
+}
+.homebar:active{background:var(--raised-hi)}
+.homebar .hb-pin{flex:0 0 auto; font-size:16px}
+.homebar .hb-body{flex:1; min-width:0}
+.homebar .hb-k{display:block; font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px}
+.homebar .hb-v{display:block; font-size:13.5px; font-weight:800; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.homebar .hb-v.unset{color:var(--saffron)}
+.homebar .hb-act{flex:0 0 auto; font-size:12px; font-weight:900; color:var(--acc); padding:2px}
+
 /* "Most popular" horizontal rail (idle home) */
 /* Card width is a deliberate peek ratio: at 244px roughly one and a half cards show on a
    390px phone, so the rail always looks scrollable without a second card being so cropped
@@ -3749,7 +3764,22 @@ function renderSpin(){
     loadPopularRail();
   }
 }
-/* The idle home surface: three carousels, nothing else.
+/* The location bar above the rails: the one setting that changes what every carousel
+   shows, surfaced where the carousels are instead of only behind the gear. Tapping
+   anywhere on it opens the same "Where's home?" sheet Settings uses — typing a suburb
+   there needs no phone-location permission, which matters on an iPhone home-screen
+   install where a denied location prompt is remembered and never re-asked. */
+function homeBarHtml(){
+  var h = home();
+  return '<button class="homebar" id="homebar" aria-label="' + (h ? 'Change your set location' : 'Set your location') + '">'
+    + '<span class="hb-pin" aria-hidden="true">&#128205;</span>'
+    + '<span class="hb-body"><span class="hb-k">Your location</span>'
+    + '<span class="hb-v' + (h ? '' : ' unset') + '">'
+    + (h ? esc(homeLabel()) : 'Not set — nearby picks and distances need one') + '</span></span>'
+    + '<span class="hb-act">' + (h ? 'Change' : 'Set') + '</span></button>';
+}
+
+/* The idle home surface: the location bar, then three carousels, nothing else.
 
    Both of its old buttons have moved out. The picks button lives at the top of the Places
    tab now -- that tab IS the saved list, which is exactly what a draw runs over, so the
@@ -3761,7 +3791,7 @@ function renderSpin(){
    there instead would recurse forever behind an open result sheet, whose underlay branch
    ends in renderOptions(). */
 function idleHomeHtml(){
-  return mightLikeRail() + popularRail() + favouritesRail();
+  return homeBarHtml() + mightLikeRail() + popularRail() + favouritesRail();
 }
 /* The cuisine page. Full-width cards in the Places-tab pattern -- saved places open the
    result sheet through the existing [data-rail] delegate; Google finds carry a one-tap
@@ -5181,6 +5211,8 @@ document.getElementById('new-overlay').addEventListener('click', function(ev){
 
 /* filter chips open their sheet */
 document.getElementById('view-spin').addEventListener('click', function(ev){
+  /* the set-location bar above the rails — same sheet Settings opens */
+  if (ev.target.closest('#homebar')){ openHome(); return; }
   var tg = ev.target.closest('[data-toggle]');
   if (tg){ if (tg.dataset.toggle === 'star'){ starOn = !starOn; draw.active = false; renderSpin(); } return; }
   /* Cuisine tile: single select, tapping the active one clears it. Checked before the
@@ -5777,8 +5809,9 @@ document.getElementById('home-use').addEventListener('click', function(){
        the app to the home screen inherits a Safari-side denial — so the only reset is
        re-adding the app. Say so instead of a cryptic one-liner. */
     if (err && err.code === 1){
-      homeNote('iPhone has location blocked for this app. Easiest fix: type your suburb above. '
-        + 'To unblock the button: remove the app from the home screen, add it back from Safari, and tap Allow when asked.', true);
+      homeNote('iPhone has location blocked for this app. Easiest fix: type your suburb above — that needs no permission. '
+        + 'To unblock this button: check Settings > Privacy & Security > Location Services is on (and allowed for Safari Websites), '
+        + 'then remove the app from the home screen, add it back from Safari, and tap Allow when asked.', true);
     } else {
       homeNote('Couldn’t get a location fix. Try again, or type your suburb above.', true);
     }
