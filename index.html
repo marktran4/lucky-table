@@ -128,7 +128,7 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 @keyframes skelpulse{0%,100%{opacity:1} 50%{opacity:.55}}
 @media (prefers-reduced-motion: reduce){ .railskel .railphoto,.railskel .railname,.railskel .railmeta{animation:none} }
 
-/* build mode: the first five saves, before there is anything to pick between */
+/* build mode: the first few saves (BUILD_TARGET), before there is anything to pick between */
 .buildhead{margin:16px 0 10px}
 .buildh{font-size:23px; font-weight:900; margin:0 0 5px; letter-spacing:-.3px}
 .buildsub{font-size:14px; font-weight:700; color:var(--muted); margin:0 0 14px; line-height:1.5}
@@ -3028,10 +3028,15 @@ function relaxAnswer(key){
    into the thing the app is already good at: browsing crowd-pleasers nearby and tapping save.
 
    ONE threshold, used by the copy, the progress bar and the unlock alike. An earlier draft
-   said "save 5" and unlocked at 3, which is two numbers on one screen. Five, because at three
-   every draw returns the identical three cards and the wheel is decorative — a worse first
-   impression than one more tap of saving. */
-var BUILD_TARGET = 5;
+   said "save 5" and unlocked at 3, which is two numbers on one screen.
+
+   Was 5, now 3 (Mark, 2026-08-29): the gate itself read as the limiting thing in real use,
+   which outweighs the argument for 5. That argument still holds and is the known cost —
+   at exactly 3 saved places `weightedSample(pool, 3)` returns all three every spin, so the
+   wheel is decorative until the 4th save. Deliberate: getting to the loop sooner beats a
+   better-shuffled first draw. Change this one constant to move it; nothing hardcodes the
+   number. */
+var BUILD_TARGET = 3;
 function buildModeActive(){
   /* Needs something to build FROM: with no Places key or no home point the rail is empty and
      this would be a progress bar over nothing — that case gets "Set your area" instead.
