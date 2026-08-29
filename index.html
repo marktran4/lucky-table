@@ -2650,7 +2650,12 @@ function renderBroad(host){
   }
   var cnt = Object.keys(nearby.selected).length;
   var html = answerBarHtml()
-    + '<div class="stagelabel">The field · ' + nearby.broad.length + ' new within ' + km + ' km</div>';
+    /* Show "shown of found" once there is more behind Show more. Without it a short page is
+       indistinguishable from a thin area -- and it makes the page size visible, which is how
+       a stale cached build gets spotted from the outside. */
+    + '<div class="stagelabel">The field \u00b7 ' + nearby.broad.length
+    + ((nearby.cands && nearby.cands.length > nearby.broad.length) ? ' of ' + nearby.cands.length : '')
+    + ' new within ' + km + ' km</div>';
   html += '<div class="brlist">';
   nearby.broad.forEach(function(r){
     var sel = !!nearby.selected[r.placeId];
