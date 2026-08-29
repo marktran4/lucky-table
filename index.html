@@ -2054,12 +2054,109 @@ function confetti(big){
 function photoHtml(p, cls){
   var emoji = cuisineEmoji(p.cuisine);
   var src = safeUrl(p.photoUri);
+  /* data-pid only for a SAVED place -- a raw discovery rec has no id to patch back to, and
+     its photo is already resolved lazily by loadPopPhotos/loadBroadPhotos. */
+  var pid = p.id ? ' data-pid="'+esc(p.id)+'"' : '';
   if (src){
-    return '<div class="'+cls+'"><img src="'+esc(src)+'" alt="" '
-      + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+    /* No inline onerror: see the capture-phase listener below for why one cannot work here. */
+    return '<div class="'+cls+'"'+pid+'><img src="'+esc(src)+'" alt="">'
       + '<div class="ph-emoji" style="display:none">'+emoji+'</div></div>';
   }
-  return '<div class="'+cls+'"><div class="ph-emoji" style="display:flex">'+emoji+'</div></div>';
+  return '<div class="'+cls+'"'+pid+'><div class="ph-emoji" style="display:flex">'+emoji+'</div></div>';
+}
+
+/* ==================== photos that keep working ====================
+   A saved place used to store ONLY `photoUri` -- the signed URL Google returns from
+   /media?skipHttpRedirect=true. That URL is time-limited. When it lapsed the card fell back
+   to the cuisine emoji and there was no way back except the per-place "Refresh from Google"
+   in the detail sheet, which spends a whole Details call to repair one card. On a list that
+   has been running for months that is most of the list showing emoji instead of a photo --
+   which is exactly what it looked like.
+
+   The fix is to also persist `photoName`, the STABLE resource id Google gives alongside it
+   ("places/<id>/photos/<ref>"). Re-resolving that is a cheap Photo call rather than a
+   Details call, so a lapsed photo can heal itself. Every new save carries it, and
+   refreshDetail now writes it too.
+
+   Places saved BEFORE this have no photoName, so they need one Details call each to learn
+   it. That is the expensive path, so it is rationed the same way loadPopPhotos rations
+   photos: only for cards actually on screen, at most one attempt per place per session, and
+   no more than PHOTO_DETAILS_MAX per session while browsing. Settings has an explicit
+   "Fetch missing photos" button that lifts the cap, because a bill the user asked for is a
+   different thing from one the app decided to run up on its own. */
+var PHOTO_DETAILS_MAX = 8;      // Details calls per session for photo repair, while browsing
+var photoTried = {};            // place id -> attempted this session (also the anti-loop guard)
+var photoDetailsUsed = 0;
+
+function placeNeedsPhoto(p){ return !!p && !safeUrl(p.photoUri); }
+
+/* Write whatever we learned, even if only half of it worked: a photoName on the record is
+   worth keeping on its own, because the next attempt is then the cheap call. */
+function resolvePhoto(id, photoName, patch){
+  Places.photo(photoName).then(function(uri){
+    if (uri) patch['places/'+id+'/photoUri'] = uri;
+    if (Object.keys(patch).length) Store.patch(patch);
+  }).catch(function(){
+    if (Object.keys(patch).length) Store.patch(patch);
+  });
+}
+function fillPhoto(id, opts){
+  opts = opts || {};
+  if (!placesKeyReady() || photoTried[id]) return;
+  var p = place(id);
+  if (!p) return;
+  if (!opts.force && !placeNeedsPhoto(p)) return;
+  photoTried[id] = true;
+  if (p.photoName){ resolvePhoto(id, p.photoName, {}); return; }
+  if (!p.placeId) return;                       // added by name only: Google has nothing to give
+  if (!opts.nocap && photoDetailsUsed >= PHOTO_DETAILS_MAX) return;
+  photoDetailsUsed++;
+  Places.details(p.placeId).then(function(rec){
+    if (!rec || !rec.photoName) return;
+    resolvePhoto(id, rec.photoName, { ['places/'+id+'/photoName']: rec.photoName });
+  }).catch(function(){});
+}
+/* Called from the render path with the places actually being drawn. Async by nature: each
+   repair lands as a Store.patch, which re-renders, and photoTried keeps that from looping. */
+function fillPhotos(list){
+  if (!placesKeyReady()) return;
+  (list||[]).forEach(function(p){ if (p && p.id && placeNeedsPhoto(p)) fillPhoto(p.id); });
+}
+/* The img actually failed to load -- so photoUri is present but dead, which placeNeedsPhoto
+   cannot see. Force past that check; photoTried still allows only one repair per session. */
+function photoBroke(img){
+  img.style.display = 'none';
+  var em = img.nextElementSibling; if (em) em.style.display = 'flex';
+  var host = img.parentNode;
+  var id = host && host.dataset ? host.dataset.pid : null;
+  if (id) fillPhoto(id, { force:true });
+}
+/* This whole file runs inside a strict-mode IIFE, so NOTHING in it is a global and an
+   inline onerror="photoBroke(this)" attribute silently resolves to undefined -- the swap
+   never runs and a lapsed photo shows a broken-image glyph instead of even the emoji. The
+   original inline handler got away with it only by being a self-contained expression that
+   referenced no functions.
+
+   So the failure path is delegated instead. `error` events do not bubble, which is why this
+   listens in the CAPTURE phase; that is the only way to hear an image failure from document
+   level. Guarded on the .ph-emoji sibling so it reacts to this app's photo slots and nothing
+   else on the page. */
+document.addEventListener('error', function(ev){
+  var img = ev.target;
+  if (!img || img.tagName !== 'IMG') return;
+  var em = img.nextElementSibling;
+  if (!em || !em.classList || !em.classList.contains('ph-emoji')) return;
+  photoBroke(img);
+}, true);
+/* Settings: repair the whole list in one explicit, counted go. */
+function backfillPhotos(){
+  var need = placesArr().filter(function(p){ return placeNeedsPhoto(p) && (p.photoName || p.placeId); });
+  if (!need.length){ toast('Every place already has a photo'); return; }
+  need.forEach(function(p){ photoTried[p.id] = false; fillPhoto(p.id, { nocap:true }); });
+  toast('Fetching ' + need.length + ' photo' + (need.length === 1 ? '' : 's') + '\u2026');
+}
+function photosMissingCount(){
+  return placesArr().filter(function(p){ return placeNeedsPhoto(p) && (p.photoName || p.placeId); }).length;
 }
 
 /* ==================== pool + draw (spec section 4) ==================== */
@@ -2456,6 +2553,7 @@ var RAIL_SAVED_MAX = 12;
    sheet, same as tapping an option card, which is the right destination from a home screen
    whose whole job is "where are we eating". */
 function savedRailCards(list){
+  fillPhotos(list);                       // repair anything on screen without a working photo
   return list.map(function(p){
     var bits = [];
     if (p.rating) bits.push('\u2605 ' + p.rating + (p.ratingCount ? ' (' + p.ratingCount + ')' : ''));
@@ -2851,7 +2949,7 @@ function buildDiscoveryRec(rec){
     placeId: rec.placeId, name: rec.name, cuisine: rec.cuisine, priceLevel: rec.priceLevel,
     suburb: rec.suburb, address: rec.address, lat: rec.lat, lng: rec.lng, mapsUri: rec.mapsUri,
     phone: rec.phone, website: rec.website, rating: rec.rating, ratingCount: rec.ratingCount,
-    photoUri: rec.photoUri, hours: rec.hours, kidFriendly: rec.kidFriendly,
+    photoUri: rec.photoUri, photoName: rec.photoName, hours: rec.hours, kidFriendly: rec.kidFriendly,
     by: user || null, addedAt: Date.now(), poolState: 'want', skips: 0, discovered: true
   };
   /* Prefer notes already fetched onto the rec; only mine inline if this rec still carries
@@ -3660,6 +3758,7 @@ function renderList(){
   }
   arr.sort(activeSort().cmp);
   renderSortOptions();
+  fillPhotos(arr.slice(0, 20));           // the rows a thumb can plausibly reach, not the whole list
   var host = document.getElementById('listcards');
   if (!arr.length){
     /* "nothing matched" and "nothing here yet" are different problems with different fixes */
@@ -4043,7 +4142,8 @@ function saveAdd(manual){
       placeId: rec.placeId, name: (val('cf-name')||rec.name), cuisine: val('cf-cuisine'),
       priceLevel: rec.priceLevel, suburb: val('cf-suburb'), address: rec.address,
       lat: rec.lat, lng: rec.lng, mapsUri: rec.mapsUri, phone: rec.phone, website: rec.website,
-      rating: rec.rating, ratingCount: rec.ratingCount, photoUri: rec.photoUri, hours: rec.hours,
+      rating: rec.rating, ratingCount: rec.ratingCount, photoUri: rec.photoUri,
+      photoName: rec.photoName, hours: rec.hours,
       kidFriendly: document.getElementById('cf-kid').checked
     };
     var notes = val('cf-notes'); if (notes) base.notes = notes;
@@ -4232,6 +4332,9 @@ function refreshDetail(){
       if (rec[k] !== undefined) patch['places/'+id+'/'+k] = rec[k];
     });
     if (rec.photoName){
+      /* keep the stable name, not just the signed URL -- next time it lapses, the repair is
+         a cheap Photo call instead of another Details call */
+      patch['places/'+id+'/photoName'] = rec.photoName;
       Places.photo(rec.photoName).then(function(uri){ patch['places/'+id+'/photoUri'] = uri; Store.patch(patch); toast('Updated from Google'); })
         .catch(function(){ Store.patch(patch); toast('Updated from Google'); });
     } else { Store.patch(patch); toast('Updated from Google'); }
@@ -4604,6 +4707,17 @@ function renderSettings(){
         ? '<span class="dot-ok">&#9679;</span> Present'
         : '<span class="dot-bad">&#9679;</span> Not set — add it to places-config.js',
         null, null, placesKeyReady() ? '' : 'warn')
+    + (function(){
+        /* An explicit, counted way to repair every lapsed photo at once. Browsing repairs
+           at most PHOTO_DETAILS_MAX per session on purpose; this is the user asking for the
+           rest, with the cost stated before the tap rather than after. */
+        var miss = photosMissingCount();
+        return miss
+          ? settingsRow('Missing photos', miss + ' place' + (miss === 1 ? '' : 's')
+              + ' \u2014 up to ' + miss + ' Google lookup' + (miss === 1 ? '' : 's'),
+              'set-photofill', 'Fetch')
+          : settingsRow('Photos', 'Every place has one');
+      })()
     + settingsRow('Calls today', stats.total
         ? stats.total + ' &mdash; ' + kinds.map(function(k){ return esc(k) + ' ' + stats.byKind[k]; }).join(', ')
         : 'None yet today')
@@ -5152,6 +5266,7 @@ document.getElementById('gear').addEventListener('click', openSettings);
 document.getElementById('set-close').addEventListener('click', function(){ closeOverlay('settings-overlay'); });
 document.getElementById('settings-overlay').addEventListener('click', function(ev){
   if (ev.target.id === 'settings-overlay'){ closeOverlay('settings-overlay'); return; }
+  if (ev.target.closest('#set-photofill')){ backfillPhotos(); renderSettings(); return; }
   var t = ev.target.closest('button'); if (!t) return;
   if (t.id === 'set-home'){ closeOverlay('settings-overlay'); openHome(); }
   else if (t.id === 'set-who'){ openWho(); }
