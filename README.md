@@ -15,8 +15,17 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
 ## How it works
 
 - **Home tab** (renamed from Dine out, 2026-08-29) is exactly that, and it is a **browse surface, not a stack of buttons**: the
-  cuisine tile row, then three carousels. Both of the old full-width entry points have
-  moved off it.
+  cuisine tile row, then the location bar and three carousels. Both of the old full-width
+  entry points have moved off it.
+- **Your set location shows on the Home tab** as a tappable bar above the carousels —
+  the suburb you picked, or the raw coordinates if it came from the phone's GPS, since
+  that is what the rails and every distance are measured from. It used to be visible only
+  in Settings. Tapping the bar opens the same "Where's home?" sheet Settings uses; typing
+  a suburb there needs **no location permission**, which matters on an iPhone home-screen
+  install where a denied location prompt is remembered and never re-asked (the sheet's
+  error message walks through the reset: Location Services on in iPhone Settings, then
+  remove the icon and re-add it from Safari). Settings keeps its Home point row — this is
+  the same setting surfaced where its effect is.
 - **Your picks now lives at the top of the Places tab** — the tab that holds the list a
   draw actually runs over, so the action sits with its own data. The button carries **the
   table's own name for its picks** — "Our Picks" until someone renames it in Settings (this
@@ -46,7 +55,7 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   saved-list-only and say so. Each Google find carries a one-tap **+** save; saving moves
   the card up into your-list on the spot. While a page is open the tile also narrows the
   picks draw, so Our Picks agrees with what you're looking at.
-- **The three home carousels**, in this order under the two buttons:
+- **The three home carousels**, in this order under the location bar:
   **Places you might like** (your own saved want-to-try list, ordered by the same weighting
   the draw uses — things you haven't been offered lately and have been waiting a while come
   first), **Popular in your area** (the Google discovery rail, below), and **Your
