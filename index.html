@@ -162,6 +162,36 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .chip.on{background:var(--ink); color:var(--bg)}
 .chip.clearchip{background:transparent; border:1.5px dashed var(--ink); opacity:.75}
 
+/* cuisine tiles — the home screen's browse row, in place of the old filter chip bar.
+   A pill is a category, not a filter sheet: one tap narrows every carousel below to that
+   food, a second tap clears it. The old chips still exist behind the trailing Filters
+   pill, because distance/price/rating/open-now are what the draw actually reads. */
+.tilebar{display:flex; gap:8px; margin:12px -18px 6px; padding:0 18px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+.tilebar::-webkit-scrollbar{display:none}
+.tile{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:6px;
+  background:var(--raised); border-radius:99px; padding:10px 15px;
+  font-weight:800; font-size:13.5px; color:var(--ink); white-space:nowrap;
+}
+.tile .em{font-size:15px; line-height:1}
+.tile.on{background:var(--acc); color:#0A0A0A}
+.tile.filterpill{background:transparent; border:1.5px solid var(--line)}
+.tile.filterpill.hasfilters{border-color:var(--ink)}
+.tile .fcount{
+  background:var(--ink); color:var(--bg); border-radius:99px;
+  font-size:11px; font-weight:900; padding:1px 6px; margin-left:1px;
+}
+/* the empty/CTA card that closes a carousel with nothing (or little) in it */
+.railcta{
+  width:264px; height:178px; border-radius:17px; background:var(--raised);
+  border:1.5px dashed var(--line);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  font-weight:800; font-size:14px; text-align:center; padding:0 18px; line-height:1.4;
+}
+.railcta .arr{width:34px; height:34px; border-radius:50%; background:var(--raised-hi); display:flex; align-items:center; justify-content:center; font-size:16px}
+.railcta .sub{color:var(--muted); font-weight:700; font-size:12px}
+.railnone{font-size:13.5px; font-weight:700; color:var(--muted); margin:-2px 0 4px; line-height:1.5}
+
 /* filter bottom sheet */
 #fsheet{text-align:center}
 .fs-handle{width:36px; height:4px; border-radius:2px; background:var(--raised-hi); margin:0 auto 14px}
@@ -656,6 +686,7 @@ textarea.txtinput{min-height:60px; resize:vertical}
 <main>
   <!-- ===== SPIN VIEW ===== -->
   <section class="view" id="view-spin">
+    <div class="tilebar" id="tilebar"></div>
     <div class="filterbar" id="filterbar"></div>
 
     <div id="spinaction"></div>
@@ -1010,6 +1041,74 @@ function cuisineType(label){
   return null;
 }
 
+/* ==================== cuisine tiles (home browse row) ====================
+   [label, emoji, google primary type or null, match keywords]
+
+   Two jobs, and they are deliberately separate:
+
+   1. MATCH (always works) — the keywords are tested against a place's stored `cuisine`
+      (Google's primaryTypeDisplayName, minus a trailing "Restaurant") and its name, so one
+      tap narrows every home carousel AND the draw to that food. Local, free, no API call.
+   2. SEARCH (only where a type exists) — the third column is a Google Places primary type
+      for `includedPrimaryTypes`, which is how discovery filters server-side. A tile with a
+      type gets a "Find X near you" card at the end of the first carousel; one without gets
+      no CTA rather than a search that quietly returns the wrong food.
+
+   Wings and Bubble tea are the two with no type: Places (New) has no wings category, and
+   the tea/boba side of the type tree hasn't been checked against the live API. Verify
+   `tea_house` (and anything chicken-shaped) with one real searchNearby before promoting
+   them off null -- an unknown type is a 400, not an empty result.
+
+   Keywords are matched on WORD BOUNDARIES, not as raw substrings, because the dangerous
+   cases are real and quiet: 'tea' is inside "steak", 'pho' inside "photo" and "phone",
+   'deli' inside "delicious". See tileMatch for the exact rule. */
+var CUISINE_TILES = [
+  ['Burgers',    '\uD83C\uDF54', 'hamburger_restaurant',  ['burger','hamburger']],
+  ['Thai',       '\uD83C\uDF5C', 'thai_restaurant',       ['thai']],
+  ['Wings',      '\uD83C\uDF57', null,                    ['wing','fried chicken','chicken shop','rotisserie']],
+  ['Coffee',     '\u2615',        'coffee_shop',           ['coffee','cafe','espresso','roaster']],
+  ['Japanese',   '\uD83C\uDF63', 'japanese_restaurant',   ['japan','sushi','ramen','izakaya','donburi','yakitori']],
+  ['Bubble tea', '\uD83E\uDDCB', null,                    ['bubble tea','boba','milk tea','tea house','teahouse','chatime','gong cha']],
+  ['Sandwiches', '\uD83E\uDD6A', 'sandwich_shop',         ['sandwich','banh mi','bagel','deli','panini','focaccia']],
+  ['Vietnamese', '\uD83C\uDF72', 'vietnamese_restaurant', ['vietnam','viet','pho','banh mi']],
+  ['Greek',      '\uD83E\uDD59', 'greek_restaurant',      ['greek','souvlaki','gyros','yiros']]
+];
+function tileDef(label){
+  for (var i=0;i<CUISINE_TILES.length;i++){ if (CUISINE_TILES[i][0] === label) return CUISINE_TILES[i]; }
+  return null;
+}
+/* Matched against a place's cuisine label and its name only -- never the suburb, or "Deli
+   Park" would be a sandwich shop.
+
+   Two rules, and the split is the point:
+     - a SHORT keyword (under 5 chars) must be a whole word, with an optional plural 's'.
+       \bphos?\b matches "Pho Hung" and not "Photo Cafe"; \bwings?\b still matches "Wings".
+     - a LONGER keyword matches as a word PREFIX, so 'sandwich' catches "Sandwiches",
+       'vietnam' catches "Vietnamese", 'burger' catches "Burgers". At 5+ characters an
+       accidental prefix collision stops being plausible.
+
+   The haystack is de-accented first, so "Caf\u00e9 Rosso" is reachable from the ASCII
+   keyword 'cafe' without carrying a second accented copy of every entry.
+
+   Works on a saved place or a raw discovery rec -- both carry `cuisine` and `name`. */
+var TILE_RE = {};
+function tileKeywordRe(kw){
+  if (!TILE_RE[kw]){
+    var lit = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');   // `lit`, not `esc` -- esc() is the global HTML escaper
+    TILE_RE[kw] = new RegExp(kw.length < 5 ? '\\b' + lit + 's?\\b' : '\\b' + lit);
+  }
+  return TILE_RE[kw];
+}
+function tileMatch(label, p){
+  var def = tileDef(label);
+  if (!def || !p) return true;
+  var hay = (String(p.cuisine||'') + ' ' + String(p.name||'')).toLowerCase();
+  hay = hay.normalize ? hay.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : hay;
+  var kws = def[3];
+  for (var i=0;i<kws.length;i++){ if (tileKeywordRe(kws[i]).test(hay)) return true; }
+  return false;
+}
+
 /* ==================== Google Places (New) client ==================== */
 /* Add-time only, plus one open-check per locked-in pick. Field masks per spec section 5. */
 var PLACES_BASE = 'https://places.googleapis.com/v1';
@@ -1286,6 +1385,11 @@ var kidOn = false;
 var starOn = false;                                          // favourites-only draw, session like the rest
 var cuisines = {};                                           // session only (set of cuisine strings)
 var prices = {};                                             // session only (set of 1/2/3)
+var tile = null;                                             /* active cuisine tile label, or null. Session-only like the rest.
+                                                                Deliberately NOT part of anyFilterOn(): it is a browse category with its
+                                                                own visible selected state in the tile row, so folding it into the chip
+                                                                bar's "a filter is on" test would spring the chips open on every tap. It
+                                                                still narrows computePool, so the draw can never disagree with the row. */
 
 /* Places-tab browse controls. Search is session-only (a stale query hiding the list on
    reopen would be baffling); sort order IS sticky, because it's a standing preference
@@ -1921,6 +2025,7 @@ function computePool(opts){
       var d = driveDistanceKm(p, h);
       if (d == null || d > ring) return false;      // no coords + a ring on = can't confirm, exclude
     }
+    if (!opts.ignoreTile && tile && !tileMatch(tile, p)) return false;
     if (!opts.ignoreCuisine && cuKeys.length && !cuisines[p.cuisine]) return false;
     if (!opts.ignorePrice && prKeys.length){
       if (!(p.priceLevel == null || prices[p.priceLevel])) return false;  // unknown price always passes
@@ -2277,22 +2382,121 @@ function loadPopPhotos(){                              // only pay for photos ac
     }).catch(function(){});
   });
 }
+/* ==================== home carousels ====================
+   Three rails, in this order, all of them narrowed by the active cuisine tile:
+
+     1. Places you might like  -- your own saved want-to-try pool, best-first
+     2. Popular in your area   -- Google discovery (popularRail, below)
+     3. Your favourites        -- the starred shelf, been-there included
+
+   Only (2) costs anything. (1) and (3) are re-reads of state already in memory, so they
+   re-render on every renderSpin() for free; the Google rail keeps its own day-cache and
+   click budget exactly as before. */
+var RAIL_SAVED_MAX = 12;
+
+/* A rail of SAVED places. `data-rail` is the existing delegate hook -- it opens the result
+   sheet, same as tapping an option card, which is the right destination from a home screen
+   whose whole job is "where are we eating". */
+function savedRailCards(list){
+  return list.map(function(p){
+    var bits = [];
+    if (p.rating) bits.push('\u2605 ' + p.rating + (p.ratingCount ? ' (' + p.ratingCount + ')' : ''));
+    bits.push(priceLabel(p.priceLevel));
+    if (p.suburb) bits.push(esc(p.suburb));
+    return '<div class="railcard" data-rail="' + esc(p.id) + '" role="button" tabindex="0"'
+      + ' aria-label="' + esc(p.name) + '">'
+      + photoHtml(p, 'railphoto')
+      + '<div class="railname">' + esc(p.name) + '</div>'
+      + '<div class="railmeta">' + bits.join(' \u00b7 ') + '</div></div>';
+  }).join('');
+}
+/* The card that closes a tile-filtered rail with nothing in it. Offered only where the tile
+   carries a Google primary type -- see CUISINE_TILES. Without one, a search would return
+   whatever `restaurant` returns and call it Wings. */
+function tileSearchCard(){
+  var def = tile && tileDef(tile);
+  if (!def || !def[2] || !placesKeyReady() || !home()) return '';
+  return '<div class="railcard" data-tilesearch="1" role="button" tabindex="0"'
+    + ' aria-label="Find ' + esc(tile) + ' near you">'
+    + '<div class="railcta"><span class="arr" aria-hidden="true">\u2192</span>'
+    + 'Find ' + esc(tile) + ' near you<span class="sub">searches Google</span></div></div>';
+}
+/* "No bubble tea in today's nearby picks." -- "Nothing bubble tea" doesn't parse, and the
+   tile labels are a mix of plurals ("Burgers") and mass nouns ("Coffee", "Bubble tea"), so
+   "No <label>" is the one opener that reads correctly for all nine. */
+function tileNote(what){
+  return '<div class="railnone">No ' + esc(String(tile).toLowerCase()) + ' ' + what + '.</div>';
+}
+
+/* Carousel 1. Ordered by drawWeight, which is the same preference the draw already uses:
+   places that haven't been offered lately and have been waiting a while rise to the front.
+   It is deterministic (no RNG), so the rail doesn't reshuffle under your finger on every
+   re-render -- unlike the draw, which samples from those weights. */
+function mightLikeRail(){
+  var pool = computePool({});
+  if (!pool.length && !tile) return '';                 // build mode / relaxation own that case
+  pool = pool.slice().sort(function(a, b){
+    var d = drawWeight(b) - drawWeight(a);
+    return d !== 0 ? d : strCmp(a.name, b.name);
+  }).slice(0, RAIL_SAVED_MAX);
+  var sub = tile ? esc(tile) + ' on your list' : 'from your list';
+  var html = '<h2>Places you might like <small>' + sub + '</small></h2>';
+  if (!pool.length){
+    var cta = tileSearchCard();
+    html += tileNote('on your list yet');
+    if (!cta) return html;
+    return html + '<div class="rail">' + cta + '</div>';
+  }
+  return html + '<div class="rail">' + savedRailCards(pool) + tileSearchCard() + '</div>';
+}
+
+/* Carousel 3. Starred places, been-there included on purpose: a favourite you have already
+   eaten at is the most likely thing you want to book again, and the want-to-try shelf above
+   already covers the other case. Hidden entirely when there is nothing starred -- an empty
+   shelf teaching you about a feature is clutter on the screen you look at most. */
+function favouritesRail(){
+  var favs = placesArr().filter(function(p){
+    if (!p.star || p.blocked || isExcludedPlace(p)) return false;
+    return !tile || tileMatch(tile, p);
+  });
+  if (!favs.length) return '';
+  favs.sort(function(a, b){ return (b.rating || 0) - (a.rating || 0) || strCmp(a.name, b.name); });
+  return '<h2>Your favourites <small>' + (tile ? esc(tile) + ' \u00b7 ' : '')
+    + favs.length + ' starred</small></h2>'
+    + '<div class="rail">' + savedRailCards(favs.slice(0, RAIL_SAVED_MAX)) + '</div>';
+}
+
 function popularRail(){
   if (!placesKeyReady() || !home()) return '';        // discovery-only: nothing to suggest without Google + a home point
   var pops = railOrder(railEligible());                // date-seeded daily order; saved places drop off
+  /* The tile narrows what Google already gave us; it does NOT re-run the search. A batch is
+     billable and the day's pool is capped, so paying for a fresh Thai-only fetch on a tile
+     tap would be a real cost per tap. The "Find X near you" card on the carousel above is
+     the deliberate, one-tap-to-spend route into that search. */
+  var all = pops;
+  if (tile) pops = pops.filter(function(r){ return tileMatch(tile, r); });
   if (!pops.length){
-    if (!(popRail.loading || popRail.filling)) return '';
-    var skel = '<div class="railcard railskel"><div class="railphoto"></div>'
-      + '<div class="railname"></div><div class="railmeta"></div></div>';
-    return '<h2>Tonight&rsquo;s crowd-pleasers <small>finding spots…</small></h2>'
-      + '<div class="rail">' + skel + skel + '</div>';
+    if (popRail.loading || popRail.filling){
+      var skel = '<div class="railcard railskel"><div class="railphoto"></div>'
+        + '<div class="railname"></div><div class="railmeta"></div></div>';
+      return '<h2>Popular in your area <small>finding spots…</small></h2>'
+        + '<div class="rail">' + skel + skel + '</div>';
+    }
+    /* A tile that filtered a loaded rail down to nothing has to say so, or the whole
+       section vanishes and reads as "the app broke" rather than "no Thai in today's pool". */
+    if (tile && all.length){
+      return '<h2>Popular in your area <small>' + esc(tile) + '</small></h2>'
+        + tileNote('in today\u2019s nearby picks');
+    }
+    return '';
   }
   var shown = pops.slice(0, railVisibleCount());
   markSeen(shown.map(function(r){ return r.placeId; }));      // the rail counts as having seen them
   /* The gate (4.5★+, 300+ reviews) used to be spelled out here, which read as spec rather
      than an offer — and every card already prints its own rating and review count, so the
      information is a glance away rather than lost. */
-  var html = '<h2>Tonight&rsquo;s crowd-pleasers <small>near you · fresh daily</small></h2><div class="rail">';
+  var html = '<h2>Popular in your area <small>'
+    + (tile ? esc(tile) + ' · ' : '') + 'fresh daily</small></h2><div class="rail">';
   shown.forEach(function(r){
     /* role on the card with a real <button> inside it is knowingly imperfect nesting; the
        alternative is leaving the card unreachable by keyboard entirely. Flagged for the
@@ -2304,8 +2508,13 @@ function popularRail(){
       + '<div class="railname">'+esc(r.name)+'</div>'
       + '<div class="railmeta">&#9733; '+r.rating+' ('+r.ratingCount+') · '+priceLabel(r.priceLevel)+'</div></div>';
   });
-  /* up to RAIL_MAX_CLICKS taps, each revealing RAIL_STEP more; hide once capped or nothing left */
-  var moreLeft = railClicks < RAIL_MAX_CLICKS && (pops.length > shown.length || !railExhausted());
+  /* up to RAIL_MAX_CLICKS taps, each revealing RAIL_STEP more; hide once capped or nothing left.
+     With a tile on, "Show more" is offered ONLY when the filtered pool already holds more --
+     never when it would have to fetch. The fetch isn't cuisine-scoped, so paying for a batch
+     to maybe surface one more Thai place is the wrong trade; the "Find X near you" card is
+     the tile-shaped way to spend, and it searches for the right thing. */
+  var moreLeft = railClicks < RAIL_MAX_CLICKS
+    && (pops.length > shown.length || (!tile && !railExhausted()));
   if (moreLeft){
     html += '<div class="railcard" data-railmore="1"><div class="railmorebox">'
       + (popRail.filling ? '<span class="arr">…</span>Finding more'
@@ -2779,10 +2988,11 @@ function render(){
 
 function mealVerb(){ return meal === 'lunch' ? 'lunch' : 'dinner'; }
 
-/* Below this many places in the raw pool, the chip bar is mostly a row of ways to empty
-   your own list — six controls over a handful of restaurants. It collapses to one
-   affordance until the list is big enough for narrowing to be a real question. */
-var CHIPS_MIN_POOL = 8;
+/* The chip bar used to live at the top of the home screen, collapsing to one affordance
+   below CHIPS_MIN_POOL places. The cuisine tile row owns that space now, so the chips are
+   collapsed by DEFAULT at every list size and open only on request (or when a filter is
+   already on, which must always be able to explain thin results). The pool threshold is
+   gone with them; `chipsExpanded` is now the whole story. */
 var chipsExpanded = false;                 // session-only: asked to see them, keep them
 function rawPoolSize(){
   return placesArr().filter(function(p){ return !isBeen(p) && !p.blocked && !isExcludedPlace(p); }).length;
@@ -2791,7 +3001,7 @@ function rawPoolSize(){
    would hide the very reason the results are thin, which is the opposite of the point.
    An active filter always shows its chip, its count and Clear all. */
 function chipsVisible(){
-  return anyFilterOn() || chipsExpanded || rawPoolSize() >= CHIPS_MIN_POOL;
+  return anyFilterOn() || chipsExpanded;
 }
 function anyFilterOn(){
   return dist !== 'any' || Object.keys(cuisines).length > 0 || Object.keys(prices).length > 0
@@ -2801,15 +3011,39 @@ function clearAllFilters(){
   mealOn = false; openNow = false; ratingMin = 0; kidOn = false; starOn = false;
   dist = 'any';
   cuisines = {}; prices = {};
+  tile = null;                 // "Clear all" that leaves a cuisine tile lit is a lie
 }
 
 function chipHtml(kind, label, on){
   return '<button class="chip'+(on?' on':'')+'" data-fs="'+kind+'">'+label+' <span class="caret">&#9660;</span></button>';
 }
+/* The browse row: nine food categories plus the way back to the old filter chips. Single
+   select -- tapping the active tile clears it -- because two categories at once is an AND
+   over substrings, which in practice means an empty screen. */
+function renderTiles(){
+  var html = CUISINE_TILES.map(function(t){
+    var on = tile === t[0];
+    return '<button class="tile'+(on?' on':'')+'" data-tile="'+esc(t[0])+'"'
+      + ' aria-pressed="'+(on?'true':'false')+'">'
+      + '<span class="em" aria-hidden="true">'+t[1]+'</span>'+esc(t[0])+'</button>';
+  }).join('');
+  var n = activeFilterCount();
+  html += '<button class="tile filterpill'+(n?' hasfilters':'')+'" id="chipsexpand">'
+    + '&#9776; Filters' + (n ? '<span class="fcount">'+n+'</span>' : '') + '</button>';
+  document.getElementById('tilebar').innerHTML = html;
+}
+/* how many of the OLD chip filters are on -- the badge on the Filters pill, so a filter set
+   and then collapsed can't narrow the screen invisibly. The tile is excluded on purpose:
+   it has its own selected state two pills to the left. */
+function activeFilterCount(){
+  return (dist !== 'any' ? 1 : 0) + (Object.keys(cuisines).length ? 1 : 0)
+    + (Object.keys(prices).length ? 1 : 0) + (ratingMin > 0 ? 1 : 0)
+    + (mealOn ? 1 : 0) + (openNow ? 1 : 0) + (kidOn ? 1 : 0) + (starOn ? 1 : 0);
+}
 function renderFilters(){
+  renderTiles();
   if (!chipsVisible()){
-    document.getElementById('filterbar').innerHTML =
-      '<button class="chip" id="chipsexpand">Narrow it down <span class="caret">&#9660;</span></button>';
+    document.getElementById('filterbar').innerHTML = '';
     return;
   }
   var cuKeys = Object.keys(cuisines), prKeys = Object.keys(prices);
@@ -3230,16 +3464,29 @@ function renderSpin(){
     renderOptions(host);
   } else if (buildModeActive()){
     renderBuild(host);
-  } else if (n === 0){
+  } else if (n === 0 && !tileOnlyEmpty()){
     renderRelaxation(host);
+  } else if (n === 0){
+    /* A cuisine tile, and only the tile, emptied the pool. Relaxation is the wrong screen
+       for that -- it talks about filters the user never opened and hides the tile row's own
+       explanation. Stay home: each carousel says what it has, and the search card offers
+       the way out. No picks button, because there is nothing to draw between. */
+    host.innerHTML = mightLikeRail() + popularRail() + favouritesRail() + somewhereNewBtnHtml();
+    loadPopularRail();
   } else {
-    /* Actions first, rail second. The rail is a full-bleed row of photos; sitting above
-       the primary button it pushed "draw 3 from your list" toward the fold and read as the
-       main event, which it isn't. Ordering settles that argument; the CSS below no longer
+    /* Actions first, rails second. The rails are full-bleed rows of photos; sitting above
+       the primary button they pushed "draw 3 from your list" toward the fold and read as the
+       main event, which they aren't. Ordering settles that argument; the CSS below no longer
        has to win it on font size. */
-    host.innerHTML = picksBtnHtml() + somewhereNewBtnHtml() + popularRail();
+    host.innerHTML = picksBtnHtml() + somewhereNewBtnHtml()
+      + mightLikeRail() + popularRail() + favouritesRail();
     loadPopularRail();
   }
+}
+/* True when the pool is empty ONLY because of the cuisine tile -- i.e. clearing it would
+   bring places back. Keeps a browse tap off the "nothing fits those filters" screen. */
+function tileOnlyEmpty(){
+  return !!tile && computePool({ ignoreTile:true }).length > 0;
 }
 function renderOptions(host){
   var live = draw.options.map(function(id){ return place(id) ? id : null; }).filter(Boolean);
@@ -3288,6 +3535,7 @@ function renderRelaxation(host){
   }
   /* try dropping each active filter individually, pick the one that recovers the most */
   var tries = [];
+  if (tile) tries.push({ key:'tile', label:'Clear ' + tile, n:computePool({ignoreTile:true}).length });
   if (mealOn) tries.push({ key:'meal', label:'Turn off '+mealVerb()+' hours', n:computePool({ignoreMeal:true}).length });
   if (openNow) tries.push({ key:'open', label:'Turn off Open now', n:computePool({ignoreOpenNow:true}).length });
   if (ratingMin > 0) tries.push({ key:'rating', label:'Include lower-rated', n:computePool({ignoreRating:true}).length });
@@ -4507,7 +4755,29 @@ document.getElementById('fab').addEventListener('click', openAdd);
 document.getElementById('view-spin').addEventListener('click', function(ev){
   var tg = ev.target.closest('[data-toggle]');
   if (tg){ if (tg.dataset.toggle === 'star'){ starOn = !starOn; draw.active = false; renderSpin(); } return; }
-  if (ev.target.closest('#chipsexpand')){ chipsExpanded = true; renderFilters(); return; }
+  /* Cuisine tile: single select, tapping the active one clears it. Checked before the
+     search card so the two never fight (different attributes, but the order is the contract).
+     draw.active is dropped because a drawn set of three predates the new category. */
+  var tl = ev.target.closest('[data-tile]');
+  if (tl){
+    tile = (tile === tl.dataset.tile) ? null : tl.dataset.tile;
+    draw.active = false;
+    nearbyReset();
+    renderSpin();
+    return;
+  }
+  /* The only place a tile spends money, and it takes a deliberate tap on a card that says so. */
+  var tsc = ev.target.closest('[data-tilesearch]');
+  if (tsc){
+    var tdef = tile && tileDef(tile);
+    if (tdef && tdef[2]){
+      nearby.wide = false;
+      setDiscCuisineOverride(tdef[2]);
+      findNearby();
+    }
+    return;
+  }
+  if (ev.target.closest('#chipsexpand')){ chipsExpanded = !chipsExpanded; renderFilters(); return; }
   var fc = ev.target.closest('[data-fs]'); if (fc){ openFilterSheet(fc.dataset.fs); return; }
   if (ev.target.closest('#clearfilters')){ clearAllFilters(); draw.active = false; nearby.active = false; renderSpin(); return; }
   if (ev.target.closest('#findbtn')){ findOptions(); return; }
@@ -4550,6 +4820,7 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
     else if (k === 'dist'){ dist = 'any'; }
     else if (k === 'cuisine') cuisines = {};
     else if (k === 'price') prices = {};
+    else if (k === 'tile') tile = null;
     findOptions(); return;
   }
   if (ev.target.closest('#relax-clear')){
