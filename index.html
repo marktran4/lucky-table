@@ -5760,29 +5760,57 @@ document.getElementById('home-search').addEventListener('input', onHomeType);
 document.getElementById('home-suggests').addEventListener('click', function(ev){
   var s = ev.target.closest('[data-hpid]'); if (s) chooseHome(s.dataset.hpid);
 });
+/* Call directly from a tap so WebKit can present its permission prompt. Both entry
+   points share recovery behaviour; a denied permission must never be retried in a loop. */
+function locationErrorMessage(err){
+  if (err && err.code === 1){
+    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios) return 'Location permission was denied. A Home Screen web app may not appear as a separate app in Settings. '
+      + 'Check Settings → Privacy & Security → Location Services. If this keeps failing from the Home Screen, '
+      + 'open the same table link in Safari, check the website’s Location permission in the page menu, '
+      + 'then tap “Use this phone’s location” there and choose Allow. You can also type your suburb above.';
+    return 'Location permission was denied. Allow location for this website in your browser’s site settings, then try again.';
+  }
+  if (err && err.code === 3) return 'Finding your location took too long. Try again with Wi-Fi or mobile data on, or type your suburb above.';
+  return 'Your phone could not determine its location. Check Location Services and your connection, then try again or type your suburb above.';
+}
+function requestPhoneLocation(button, note, success){
+  if (button.disabled) return;
+  if (window.isSecureContext === false){ note('Location needs a secure connection. Open this app using its https:// link.', true); return; }
+  if (!navigator.geolocation){ note('This browser does not support location. Open the table link in Safari or type your suburb above.', true); return; }
+  button.disabled = true;
+  note('Getting location… Choose Allow if your phone asks.');
+  var finished = false;
+  function finish(pos, err){
+    if (finished) return;
+    finished = true;
+    clearTimeout(watchdog);
+    button.disabled = false;
+    if (pos) success(pos);
+    else note(locationErrorMessage(err), true);
+  }
+  /* Some standalone WebKit failures do not deliver either callback. */
+  var watchdog = setTimeout(function(){ finish(null, {code:3}); }, 45000);
+  function attempt(precise){
+    try {
+      navigator.geolocation.getCurrentPosition(function(pos){ finish(pos); }, function(err){
+        if (finished) return;
+        if (!precise && err && (err.code === 2 || err.code === 3)){
+          note('Still finding your location… Trying a fresh GPS fix.');
+          attempt(true);
+        } else finish(null, err);
+      }, { enableHighAccuracy:precise, timeout:precise ? 20000 : 12000, maximumAge:precise ? 0 : 300000 });
+    } catch (err){ finish(null, err); }
+  }
+  attempt(false);
+}
 document.getElementById('home-use').addEventListener('click', function(){
-  if (!navigator.geolocation){ homeNote('No location on this device — type your suburb above instead.', true); return; }
-  homeNote('Getting location…');
-  /* explicit timeout: iOS standalone can otherwise leave the call pending forever (no
-     callback at all), which reads as a dead button */
-  navigator.geolocation.getCurrentPosition(function(pos){
-    /* geolocation returns coordinates and nothing else — no label, and homeLabel()
-       renders "Current location (lat, lng)" rather than pretending to know the suburb */
+  requestPhoneLocation(this, homeNote, function(pos){
     Store.patch({ 'settings/home': { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5), label: null } });
     closeOverlay('home-overlay'); toast('Home set');
     if (document.getElementById('settings-overlay').classList.contains('show')) renderSettings();
-  }, function(err){
-    /* stay in the sheet: typing a suburb needs no permission and always works. A denial
-       on an iPhone home-screen app is remembered by iOS with no re-prompt — and adding
-       the app to the home screen inherits a Safari-side denial — so the only reset is
-       re-adding the app. Say so instead of a cryptic one-liner. */
-    if (err && err.code === 1){
-      homeNote('iPhone has location blocked for this app. Easiest fix: type your suburb above. '
-        + 'To unblock the button: remove the app from the home screen, add it back from Safari, and tap Allow when asked.', true);
-    } else {
-      homeNote('Couldn’t get a location fix. Try again, or type your suburb above.', true);
-    }
-  }, { enableHighAccuracy:false, timeout:12000, maximumAge:300000 });
+  });
 });
 document.getElementById('home-skip').addEventListener('click', function(){ closeOverlay('home-overlay'); });
 
@@ -5932,16 +5960,10 @@ document.getElementById('onboard-overlay').addEventListener('click', function(ev
     return;
   }
   if (ev.target.closest('#ob-homegps')){
-    if (!navigator.geolocation){ obHomeNote('No location on this device — type your suburb above instead.', true); return; }
-    obHomeNote('Getting location…');
-    navigator.geolocation.getCurrentPosition(function(pos){
+    requestPhoneLocation(ev.target.closest('#ob-homegps'), obHomeNote, function(pos){
       Store.patch({ 'settings/home': { lat:+pos.coords.latitude.toFixed(5), lng:+pos.coords.longitude.toFixed(5), label:null } });
       onboardNext();
-    }, function(err){
-      obHomeNote(err && err.code === 1
-        ? 'Location is blocked for this app. Type your suburb above instead.'
-        : 'Couldn\u2019t get a fix. Try again, or type your suburb above.', true);
-    }, { enableHighAccuracy:false, timeout:12000, maximumAge:300000 });
+    });
     return;
   }
   var hs = ev.target.closest('[data-obhpid]');
