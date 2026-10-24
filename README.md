@@ -134,6 +134,9 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   by name (Google fills the details). **We went** moves it to Been and out of the
   pool. **Swipe a row right to remove it** (a 5-second Undo snackbar appears);
   the row's detail sheet still has a Remove button too.
+  **Pick, then spin:** on Want to try, tick the circle on up to 8 photos and a
+  **Spin these N** bar appears; the wheel picks among just those. Ticks are per-phone and
+  clear once you lock in a winner and tap Done.
   **Search** and a **sort** control sit above the segments (recently added by
   default; also longest-on-list, nearest, rating, cuisine, name). Sort order is
   remembered on the phone; the search box is not, so reopening never shows you a
