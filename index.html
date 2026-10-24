@@ -305,6 +305,13 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
   animation:pop .35s cubic-bezier(.2,.7,.3,1.3) both;
 }
 .optcard:nth-child(2){animation-delay:.06s} .optcard:nth-child(3){animation-delay:.12s}
+/* Our Picks batch: two columns so 12 fit in a few thumbs of scroll; a ticked card rings its photo */
+.options.grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.options.grid .optcard{margin:0; position:relative}
+.options.grid .optcard .optbody{padding:9px 11px 11px}
+.options.grid .optcard .optbody .name{font-size:15px}
+.options.grid .optcard .optbody .meta{font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.optcard.osel{border-color:var(--acc); box-shadow:0 0 0 2px var(--acc)}
 @keyframes pop{from{opacity:0; transform:translateY(8px) scale(.98)} to{opacity:1; transform:none}}
 @media (prefers-reduced-motion: reduce){ .optcard{animation:none} }
 .photo{width:96px; min-width:96px; background:var(--raised); position:relative}
@@ -916,18 +923,15 @@ textarea.txtinput{min-height:60px; resize:vertical}
     <p id="res-meta"></p>
     <div class="openline" id="res-open"></div>
     <div class="tasteblock" id="res-taste" style="display:none"></div>
-    <div class="sheetbtns" id="res-choose">
-      <button class="primary" id="res-lock">Lock it in</button>
-      <button class="ghost" id="res-reshuffle">Show 3 others</button>
-      <button class="quiet" id="res-back">back to the list</button>
-    </div>
-    <div class="sheetbtns" id="res-actions" style="display:none">
+    <div class="sheetbtns" id="res-actions">
       <div class="actionrow">
         <a class="actbtn" id="res-directions" target="_blank" rel="noopener">Directions</a>
         <a class="actbtn call" id="res-call">Call</a>
       </div>
+      <button class="primary" id="res-save" style="display:none">Save to your list</button>
       <button class="ghost" id="res-visited">Mark as visited when you're back</button>
       <button class="quiet" id="res-done">Done</button>
+      <button class="quiet" id="res-back">back</button>
     </div>
   </div>
 </div>
@@ -1513,7 +1517,9 @@ function activeSort(){
 }
 
 /* draw session */
-var draw = { active:false, options:[], firstSet:[], reshuffleUsed:false, pick:null };
+var draw = { active:false, options:[], sel:{}, pick:null };
+/* Our Picks puts a batch on the board to tick from (pick, then spin), not 3 to choose between */
+var OPTIONS_SHOWN = 12;
 /* discovery session — the suggest funnel. stage 'broad' (up to 15 rows) -> 'final' (3 cards -> wheel) */
 var nearby = { active:false, loading:false, error:false, stage:'broad', wide:false,
   raw:[], pool:[], broad:[], cands:[], selected:{}, final:[], shown:{}, seen:{}, batch:0, sig:null,
@@ -2308,30 +2314,17 @@ function findOptions(){
   nearby.active = false;
   var pool = drawPool();
   if (pool.length === 0){ draw.active = false; renderSpin(); return; }   // relaxation shown by renderSpin
-  var picks = weightedSample(pool, 3, drawWeight).map(function(p){ return p.id; });
-  draw = { active:true, options:picks, firstSet:picks.slice(), reshuffleUsed:false, pick:null };
+  var picks = weightedSample(pool, OPTIONS_SHOWN, drawWeight).map(function(p){ return p.id; });
+  draw = { active:true, options:picks, sel:{}, pick:null };
   logDraw(picks);
   renderSpin();
 }
-function reshuffle(){
-  if (draw.reshuffleUsed) return;
-  var exclude = {}; draw.firstSet.forEach(function(id){ exclude[id] = true; });
-  var pool = drawPool(exclude);
-  draw.reshuffleUsed = true;
-  /* Log a skip on each first-set place. No longer "future v2 data": drawWeight() reads
-     these, so passing on a place makes it rarer in later draws. */
-  var patch = {};
-  draw.firstSet.forEach(function(id){ var p = place(id); if (p) patch['places/'+id+'/skips'] = (p.skips||0)+1; });
-  if (Object.keys(patch).length) Store.patch(patch);
-  if (pool.length === 0){
-    toast('That was everything that fits. Pick one or spin the wheel.');
-    return;                                          // keep current options
-  }
-  draw.options = weightedSample(pool, 3, drawWeight).map(function(p){ return p.id; });
-  draw.pick = null;
-  logDraw(draw.options);            // after draw.pick, so a local-mode render sees final state
-  closeOverlay('result-overlay');
-  renderSpin();
+/* The one-shot "Show 3 others" reshuffle went with Lock it in (wave 18): with 12 on the
+   board, start over is the reroll. It was also the only writer of `skips`, so drawWeight's
+   skip term now only reflects history; the draw log's recency term still rotates the board. */
+/* the ticked options still on the board, in board order */
+function pickedOptions(){
+  return draw.options.filter(function(id){ return draw.sel[id] && place(id); });
 }
 
 /* ==================== cross-session seen ledger ====================
@@ -3845,23 +3838,29 @@ function renderTilePage(host){
 function renderOptions(host){
   var live = draw.options.map(function(id){ return place(id) ? id : null; }).filter(Boolean);
   if (!live.length){ draw.active = false; host.innerHTML = idleHomeHtml(); loadPopularRail(); return; }
-  var html = '<div class="optlabel">Tap one, or let the wheel decide</div><div class="options">';
+  /* pick, then spin (wave 18): tick up to LIST_PICK_MAX of the batch, then spin those. A
+     lone option has nothing to spin against, so it stays a plain tap-to-open card. */
+  var one = live.length === 1;
+  var html = '<div class="optlabel">' + (one ? 'Only one fits right now'
+             : 'Tick up to ' + LIST_PICK_MAX + ', then spin') + '</div><div class="options' + (one ? '' : ' grid') + '">';
   live.forEach(function(id){
-    var p = place(id);
+    var p = place(id), sel = !one && !!draw.sel[id];
     var bits = [];
     if (p.rating) bits.push('<span class="ratebadge">★ '+p.rating+'</span>');
     bits.push('<span class="pricebadge">'+priceLabel(p.priceLevel)+'</span>');
     if (p.cuisine) bits.push(esc(p.cuisine));
     if (p.suburb) bits.push(esc(p.suburb));
     var dm = driveMins(p); if (dm != null) bits.push(dm+' min drive');
-    html += '<div class="optcard" data-opt="'+id+'" role="button" tabindex="0" aria-label="'+esc(p.name)+'">'
+    html += '<div class="optcard'+(sel?' osel':'')+'" data-opt="'+id+'" tabindex="0" aria-label="'+esc(p.name)+'"'
+      + (one ? ' role="button"' : ' role="checkbox" aria-checked="'+(sel?'true':'false')+'"') + '>'
+      + (one ? '' : '<span class="ltick'+(sel?' sel':'')+'" aria-hidden="true"><span>'+(sel?'✓':'')+'</span></span>')
       + photoHtml(p, 'photo')
       + '<div class="optbody"><div class="name">'+esc(p.name)+'</div>'
       + '<div class="meta">'+bits.join('<span class="sep">·</span>')+'</div></div></div>';
   });
   html += '</div>';
-  if (live.length >= 2) html += '<button class="spindecide" id="spindecide">Spin to decide</button>';
   html += '<button class="findagain" id="findagain">start over</button>';
+  html += '<div id="optpickbar">' + pickBarHtml(pickedOptions().length, 'o') + '</div>';
   host.innerHTML = html;
 }
 
@@ -3928,7 +3927,7 @@ function renderSortOptions(){
    interaction as the Somewhere-new longlist, but on your own list, so the cap is 8 rather
    than 3: past 8 the wedge labels stop being readable. Selection is per-device UI state and
    never written to the table. The winner goes through the same saved-place result path as
-   a draw, tagged from:'list' so the result sheet doesn't offer to reshuffle a home draw. */
+   a draw, tagged from:'list' so Back returns to the list rather than the home board. */
 var LIST_PICK_MAX = 8;
 var listSel = {};
 function listPickToggle(sel, id, max){
@@ -3948,16 +3947,14 @@ function listSpinEntries(ids){
     return p ? { label:p.name, emoji:cuisineEmoji(p.cuisine), value:{ src:'saved', id:id, from:'list' } } : null;
   }).filter(Boolean);
 }
-function listPickBarHtml(n){
+/* the sticky Spin these N bar, shared by the Places list ('l') and the Our Picks board ('o') */
+function pickBarHtml(n, idp){
   if (!n) return '';
   return '<div class="pickspace"></div><div class="pickbar"><div class="pickrow">'
-    + (n >= 2 ? '<button class="findbtn slim" id="lpickspin">Spin these ' + n + '</button>'
+    + (n >= 2 ? '<button class="findbtn slim" id="' + idp + 'pickspin">Spin these ' + n + '</button>'
               : '<div class="lpickhint">Tick one more to spin</div>')
-    + '<button class="pickx" id="lpickclear" aria-label="Clear picks">✕</button></div>'
+    + '<button class="pickx" id="' + idp + 'pickclear" aria-label="Clear picks">✕</button></div>'
     + '<div class="pickcount">' + n + ' of ' + LIST_PICK_MAX + ' picked</div></div>';
-}
-function resShowsReshuffle(ctx){
-  return ctx.src === 'saved' && !ctx.from && draw.active && !draw.reshuffleUsed;
 }
 /* repaint one card and the bar in place: re-rendering 300 cards per tick flickers photos */
 function paintListPick(id){
@@ -3970,7 +3967,18 @@ function paintListPick(id){
     t.firstChild.textContent = on ? '✓' : '';
   });
   var bar = document.getElementById('listpickbar');
-  if (bar) bar.innerHTML = listPickBarHtml(listPickPrune(listSel).length);
+  if (bar) bar.innerHTML = pickBarHtml(listPickPrune(listSel).length, 'l');
+}
+function paintOptPick(id){
+  var on = !!draw.sel[id];
+  var c = document.querySelector('.optcard[data-opt="'+id+'"]'); if (c){
+    c.classList.toggle('osel', on);
+    c.setAttribute('aria-checked', on ? 'true' : 'false');
+    var t = c.querySelector('.ltick');
+    if (t){ t.classList.toggle('sel', on); t.firstChild.textContent = on ? '\u2713' : ''; }
+  }
+  var bar = document.getElementById('optpickbar');
+  if (bar) bar.innerHTML = pickBarHtml(pickedOptions().length, 'o');
 }
 function spinListWheel(){
   var entries = listSpinEntries(listPickPrune(listSel));
@@ -4052,7 +4060,7 @@ function renderList(){
       + '<div class="listbody"><div class="name">'+esc(p.name)+'</div>'
       + '<div class="meta">'+meta.join('<span class="sep">·</span>')+'</div></div></div></div>';
   }).join('')
-    + (which === 'try' ? '<div id="listpickbar">' + listPickBarHtml(picked.length) + '</div>' : '');
+    + (which === 'try' ? '<div id="listpickbar">' + pickBarHtml(picked.length, 'l') + '</div>' : '');
 }
 
 /* ==================== wheel (presentational: entries + onPick) ==================== */
@@ -4108,10 +4116,10 @@ function spinWheel(entries, onPick){
 }
 /* wheel callers */
 function spinSavedWheel(){
-  var entries = draw.options.map(function(id){
-    var p = place(id); return p ? { label:p.name, emoji:cuisineEmoji(p.cuisine), value:{ src:'saved', id:id } } : null;
-  }).filter(Boolean);
-  if (!entries.length){ toast('Nothing left to spin'); renderSpin(); return; }   // all options removed mid-session
+  var entries = pickedOptions().map(function(id){
+    var p = place(id); return { label:p.name, emoji:cuisineEmoji(p.cuisine), value:{ src:'saved', id:id } };
+  });
+  if (entries.length < 2){ toast('Tick at least two to spin'); renderSpin(); return; }   // picks removed mid-session
   document.getElementById('wheel-h3').textContent = 'Let the wheel decide';
   openWheel(entries, onPlacePicked);
 }
@@ -4130,6 +4138,11 @@ function onPlacePicked(ctx){
     var dupe = placesArr().filter(function(sp){ return sp.placeId && sp.placeId === ctx.rec.placeId; })[0];
     if (dupe){ ctx = { src:'saved', id: dupe.id }; }   // the other phone saved it mid-spin
   }
+  /* With Lock it in gone (wave 18) the wheel landing IS the decision: a saved winner is
+     remembered now so it sits out the next draws. A discovery winner is remembered if it
+     gets saved from the result sheet; `won` tells that save it came off the wheel. */
+  ctx.won = true;
+  if (ctx.src === 'saved') rememberPick(ctx.id);
   openResult(ctx);
 }
 
@@ -4147,12 +4160,14 @@ function openResult(ctx){
   if (p.rating) meta.push('★ '+p.rating+(p.ratingCount?' ('+p.ratingCount+')':''));
   document.getElementById('res-meta').textContent = meta.join('  ·  ');
 
-  /* reset to choose state */
-  document.getElementById('res-choose').style.display = '';
-  document.getElementById('res-actions').style.display = 'none';
-  document.getElementById('res-lock').textContent = (ctx.src === 'nearby') ? 'Save & lock it in' : 'Lock it in';
-  /* "Show 3 others" only makes sense from an active draw, not a rail tap */
-  document.getElementById('res-reshuffle').style.display = resShowsReshuffle(ctx) ? '' : 'none';
+  /* No choose step any more (wave 18): straight to Directions / Call / Mark visited. A
+     discovery place that isn't on the list yet gets Save to your list. */
+  document.getElementById('res-actions').style.display = '';
+  document.getElementById('res-save').style.display =
+    (ctx.src === 'nearby' && !ctx.savedId && !savedIdForPlaceId(p.placeId)) ? '' : 'none';
+  document.getElementById('res-back').textContent = ctx.from === 'list' ? 'back to your list'
+    : (ctx.src === 'saved' && draw.active ? 'back to the picks' : 'back');
+  fillResActions(p);
   document.getElementById('result-overlay').classList.add('show');
   document.querySelector('#result-overlay .sheet').scrollTop = 0;   // always open showing the top, not scrolled to the buttons
 
@@ -4178,7 +4193,7 @@ function savedIdForPlaceId(placeId){
   var m = placesArr().filter(function(sp){ return sp.placeId && sp.placeId === placeId; })[0];
   return m ? m.id : null;
 }
-/* THE RACE: a nearby rec is a plain in-memory object, and lockIn() reads it synchronously
+/* THE RACE: a nearby rec is a plain in-memory object, and saveResultPlace() reads it synchronously
    when it builds the record to save. If the taste fetch lands after the user has locked in,
    mutating the rec changes nothing that was stored. So always look the place up by placeId
    at resolve time and patch it if it exists by then — whether it was saved a second ago or
@@ -4235,8 +4250,6 @@ function runOpenCheck(ctx, p){
     if (!sameCtx(draw.pick, ctx)) return;             // user moved on
     if (r.businessStatus === 'CLOSED_PERMANENTLY'){
       stampOpen(el, 'shut', 'Permanently closed — pick another');
-      document.getElementById('res-reshuffle').style.display = '';   // allow a reroll even if used
-      draw.reshuffleUsed = false;
       return;
     }
     var coh = r.currentOpeningHours;
@@ -4282,17 +4295,23 @@ function nextCloseText(coh){
   } catch(e){ return ''; }
 }
 
-function lockIn(){
-  var ctx = draw.pick, p = ctxRec(ctx); if (!p) return;
-  if (ctx.src === 'nearby' && !ctx.savedId){          // save-winner-only
+/* Lock it in was retired in wave 18; its three jobs now live here. */
+/* the 14-day sit-out drawPool reads (RECENT_MS) */
+function rememberPick(key){
+  Store.patch({ 'lastPick': { placeKey:key, at:Date.now() } });
+}
+/* Save to your list, for a discovery result: the save half of the old Save & lock it in */
+function saveResultPlace(){
+  var ctx = draw.pick, p = ctxRec(ctx); if (!p || ctx.src !== 'nearby') return;
+  if (!ctx.savedId){
     var dupe = placesArr().filter(function(sp){ return sp.placeId && sp.placeId === p.placeId; })[0];
     if (dupe){ ctx.savedId = dupe.id; }
     else { var id = uid(); Store.patch({ ['places/'+id]: buildDiscoveryRec(p) }); ctx.savedId = id; toast(p.name+' saved to your list'); }
   }
-  var key = ctx.src === 'saved' ? ctx.id : ctx.savedId;
-  Store.patch({ 'lastPick': { placeKey:key, at:Date.now() } });
-  document.getElementById('res-choose').style.display = 'none';
-  document.getElementById('res-actions').style.display = '';
+  if (ctx.won) rememberPick(ctx.savedId);       // a wheel winner sits out; a browsed save doesn't
+  document.getElementById('res-save').style.display = 'none';
+}
+function fillResActions(p){
   /* built from the in-memory rec `p`, never place(key) — avoids the async-save race */
   var dir = document.getElementById('res-directions');
   dir.href = p.lat != null
@@ -4301,7 +4320,6 @@ function lockIn(){
   var call = document.getElementById('res-call');
   if (p.phone){ call.style.display = ''; call.href = 'tel:'+String(p.phone).replace(/[^+\d]/g,''); }
   else { call.style.display = 'none'; }
-  confetti(true);
 }
 
 /* mark the current pick as visited (from the result action row) */
@@ -5306,7 +5324,8 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
   if (ev.target.closest('#surprisebtn')){ openFlow(0); return; }
   var fstep = ev.target.closest('[data-flowstep]');
   if (fstep){ openFlow(flowStepIndex(fstep.dataset.flowstep)); return; }
-  if (ev.target.closest('#spindecide')){ spinSavedWheel(); return; }
+  if (ev.target.closest('#opickspin')){ spinSavedWheel(); return; }
+  if (ev.target.closest('#opickclear')){ draw.sel = {}; renderSpin(); return; }
   if (ev.target.closest('#findagain')){ draw.active = false; renderSpin(); return; }
   /* discovery: broad stage */
   var bpick = ev.target.closest('[data-bpick]'); if (bpick){ toggleBroadPick(bpick.dataset.bpick); return; }
@@ -5330,7 +5349,12 @@ document.getElementById('view-spin').addEventListener('click', function(ev){
   if (ev.target.closest('[data-railmore]')){ morePopular(); return; }
   var pc = ev.target.closest('[data-poprail]'); if (pc){ var pr = popRailRec(pc.dataset.poprail); if (pr) openResult({ src:'nearby', rec:pr, savedId:null }); return; }
   var rc = ev.target.closest('[data-rail]'); if (rc){ openResult({ src:'saved', id: rc.dataset.rail }); return; }
-  var oc = ev.target.closest('.optcard'); if (oc && oc.dataset.opt){ openResult({ src:'saved', id: oc.dataset.opt }); return; }
+  var oc = ev.target.closest('.optcard');
+  if (oc && oc.dataset.opt){
+    if (draw.options.filter(function(id){ return place(id); }).length === 1){ openResult({ src:'saved', id: oc.dataset.opt }); return; }
+    if (listPickToggle(draw.sel, oc.dataset.opt, LIST_PICK_MAX) === 'full'){ toast(LIST_PICK_MAX + ' is all the wheel can fit. Untick one first'); return; }
+    paintOptPick(oc.dataset.opt); return;
+  }
   var relax = ev.target.closest('[data-relax]');
   if (relax){
     var k = relax.dataset.relax;
@@ -5416,9 +5440,8 @@ function fsCommitDraft(){
 }
 
 /* result overlay */
-document.getElementById('res-lock').addEventListener('click', lockIn);
-document.getElementById('res-reshuffle').addEventListener('click', function(){ if (draw.pick && draw.pick.src === 'saved') reshuffle(); });
-document.getElementById('res-back').addEventListener('click', function(){ closeOverlay('result-overlay'); if (draw.pick && draw.pick.from === 'list') return; if (draw.pick && draw.pick.src === 'nearby'){ renderSpin(); } else { draw.active = false; renderSpin(); } });
+document.getElementById('res-save').addEventListener('click', saveResultPlace);
+document.getElementById('res-back').addEventListener('click', function(){ closeOverlay('result-overlay'); if (draw.pick && draw.pick.from === 'list') return; renderSpin(); });   // a draw stays up, picks and all, to spin again
 document.getElementById('res-done').addEventListener('click', function(){ if (draw.pick && draw.pick.from === 'list') listSel = {}; closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
 document.getElementById('res-visited').addEventListener('click', function(){ if (draw.pick && draw.pick.from === 'list') listSel = {}; markVisitedFlow(); closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
 
