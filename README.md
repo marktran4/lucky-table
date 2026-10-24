@@ -84,13 +84,16 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   main event, and above them it pushed the primary button toward the fold.
   Its cards each print their own rating and review count, which is where the
   4.5★/300+ gate is visible rather than spelled out in the heading.
-- **The picks button** draws 3 from the saved list, live pool count on it;
-  the draw is **weighted** — places shown in the last few draws, and ones you keep
-  skipping past, come up less often, while places that have been waiting come up more.
-  Nothing is ever excluded, so a much-skipped favourite still turns up eventually.
+- **The picks button** puts 12 from the saved list on the board, live pool count on it.
+  **Tick up to 8, then Spin these N**; the wheel picks among your ticks, and **start over**
+  draws a fresh 12. The draw is **weighted**: places shown in the last few draws come up
+  less often, while places that have been waiting come up more. Nothing is ever excluded.
+  The wheel landing is the decision: the result opens straight on **Directions / Call /
+  Mark visited**, and a saved winner sits out the next 14 days of draws. (Lock it in and
+  Show 3 others were retired 2026-10-24.)
   **Somewhere new** is Google discovery of new nearby spots. Tap a card or
-  **Spin the wheel** for the 3-wedge tie-breaker. Lock it in for Directions /
-  Call, or **Show 3 others** once. Mega fast-food franchises (McDonald's, KFC,
+  **Spin the wheel** for the 3-wedge tie-breaker; a discovery result has **Save to your
+  list**. Mega fast-food franchises (McDonald's, KFC,
   Hungry Jack's, Subway, Pizza Hut, Domino's and similar — list in `BANNED_NAME`,
   global product policy, not a per-table setting)
   are kept out of every suggestion, saved list and discovery alike. Other chains
@@ -136,7 +139,7 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   the row's detail sheet still has a Remove button too.
   **Pick, then spin:** on Want to try, tick the circle on up to 8 photos and a
   **Spin these N** bar appears; the wheel picks among just those. Ticks are per-phone and
-  clear once you lock in a winner and tap Done.
+  clear once you tap Done on the winner.
   **Search** and a **sort** control sit above the segments (recently added by
   default; also longest-on-list, nearest, rating, cuisine, name). Sort order is
   remembered on the phone; the search box is not, so reopening never shows you a
