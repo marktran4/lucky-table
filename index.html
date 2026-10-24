@@ -433,6 +433,8 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .lpickhint{flex:1; text-align:center; font-size:15px; font-weight:800; color:var(--muted); padding:13px 16px}
 @media (prefers-reduced-motion: reduce){ .ltick.sel span{animation:none} }
 .byline{font-weight:800}   /* colour comes from the member record, inline */
+.listcount{font-size:12px; font-weight:800; color:var(--muted); text-align:center; margin:2px 0 8px}
+.listcount:empty{display:none}
 .empty-list{color:var(--muted); font-weight:700; text-align:center; padding:30px 12px; line-height:1.5}
 
 /* floating add */
@@ -770,6 +772,8 @@ textarea.txtinput{min-height:60px; resize:vertical}
         <button data-seg="been">Been</button>
       </div>
     </div>
+    <div class="filterbar" id="listfilterbar"></div>
+    <div class="listcount" id="listcount"></div>
     <div id="listcards"></div>
   </section>
 
@@ -3319,18 +3323,22 @@ function renderFilters(){
     document.getElementById('filterbar').innerHTML = '';
     return;
   }
+  document.getElementById('filterbar').innerHTML = filterChipsHtml()
+    + (anyFilterOn() ? '<button class="chip clearchip" id="clearfilters">Clear all &#10005;</button>' : '');
+}
+/* The filter chips, shared by Home and the Places list (wave 19). One filter state drives
+   both; each surface appends its own Clear all, so the ids never collide. */
+function filterChipsHtml(){
   var cuKeys = Object.keys(cuisines), prKeys = Object.keys(prices);
   var cuLbl = !cuKeys.length ? 'Cuisine' : (cuKeys.length === 1 ? esc(cuKeys[0]) : 'Cuisine · '+cuKeys.length);
   var prLbl = !prKeys.length ? 'Price' : (prKeys.length === 1 ? '$'.repeat(+prKeys[0]) : 'Price · '+prKeys.length);
   var moreN = (mealOn?1:0) + (openNow?1:0) + (kidOn?1:0);
-  document.getElementById('filterbar').innerHTML =
-      chipHtml('dist', dist === 'any' ? 'Distance' : '&lt; '+(dist === 'near' ? nearKm() : midKm())+' km', dist !== 'any')
+  return chipHtml('dist', dist === 'any' ? 'Distance' : '&lt; '+(dist === 'near' ? nearKm() : midKm())+' km', dist !== 'any')
     + chipHtml('cuisine', cuLbl, cuKeys.length > 0)
     + chipHtml('price', prLbl, prKeys.length > 0)
     + chipHtml('rating', ratingMin > 0 ? ratingMin+'+ &#9733;' : 'Rating', ratingMin > 0)
     + '<button class="chip'+(starOn?' on':'')+'" data-toggle="star">&#11088; Favourites</button>'
-    + chipHtml('more', moreN ? 'More · '+moreN : 'More', moreN > 0)
-    + (anyFilterOn() ? '<button class="chip clearchip" id="clearfilters">Clear all &#10005;</button>' : '');
+    + chipHtml('more', moreN ? 'More · '+moreN : 'More', moreN > 0);
 }
 
 /* ==================== filter sheets (draft state, deferred Apply) ==================== */
@@ -3987,6 +3995,9 @@ function spinListWheel(){
   openWheel(entries, onPlacePicked);
 }
 
+/* the Want to try list under the draw's filters: the draw pool, minus the Home cuisine tile */
+function listFiltered(){ return computePool({ ignoreTile:true }); }
+
 function renderList(){
   /* The picks button, at the top of the tab that holds the list it draws from. It is a
      saved-list action, so it belongs with the saved list -- and the Dine out tab is a
@@ -4001,7 +4012,14 @@ function renderList(){
   var seg = document.querySelector('#listseg button.on');
   var which = seg ? seg.dataset.seg : 'try';
   var picked = listPickPrune(listSel);
-  var arr = placesArr().filter(function(p){ return which === 'been' ? isBeen(p) : !isBeen(p); });
+  /* Want to try narrows with the draw's filters (wave 19): at ~300 places, scrolling was the
+     problem, not card size. Been is history and is never filtered. */
+  var filtering = which === 'try' && anyFilterOn();
+  document.getElementById('listfilterbar').innerHTML = which === 'try'
+    ? filterChipsHtml() + (filtering ? '<button class="chip clearchip" id="listclearfilters">Clear all &#10005;</button>' : '')
+    : '';
+  var all = placesArr().filter(function(p){ return which === 'been' ? isBeen(p) : !isBeen(p); });
+  var arr = filtering ? listFiltered() : all;
   var total = arr.length;
   var q = listQuery.trim().toLowerCase();
   if (q){
@@ -4010,6 +4028,8 @@ function renderList(){
         .some(function(f){ return f && String(f).toLowerCase().indexOf(q) !== -1; });
     });
   }
+  document.getElementById('listcount').innerHTML = filtering
+    ? 'Showing ' + arr.length + ' of ' + all.length + ' \u00b7 filters on' : '';
   arr.sort(activeSort().cmp);
   renderSortOptions();
   fillPhotos(arr.slice(0, 20));           // the rows a thumb can plausibly reach, not the whole list
@@ -4019,6 +4039,7 @@ function renderList(){
     host.innerHTML = '<div class="empty-list">'
       + (q ? 'No matches for &ldquo;' + esc(listQuery.trim()) + '&rdquo;'
              + (total ? '<br><br>' + total + (total === 1 ? ' place is' : ' places are') + ' in this list.' : '')
+           : filtering ? 'Nothing on the list fits these filters.<br><br>Clear all, or loosen one, to see more.'
            : (which === 'been' ? 'No visits logged yet. Places you mark as visited land here.'
                                : 'No places yet. Tap + to add the first one you want to try.')) + '</div>';
     return;
@@ -5225,6 +5246,7 @@ document.querySelector('nav').addEventListener('click', function(ev){
     return;
   }
   document.body.dataset.tab = b.dataset.tab;
+  if (b.dataset.tab === 'list') renderList();    // filters set on Home show up on the list
   window.scrollTo({ top: 0 });                   // each tab starts at its top, like every phone app
   if (b.dataset.tab === 'map') openMapTab();     // first paint is deferred until the tab is actually used
 });
@@ -5249,9 +5271,15 @@ document.querySelector('nav').addEventListener('click', function(ev){
 /* The picks button now lives at the top of the Places tab. It hands off to Dine out,
    because the option cards and the wheel render on that surface -- the draw is unchanged. */
 document.getElementById('view-list').addEventListener('click', function(ev){
-  if (!ev.target.closest('#findbtn')) return;
-  document.body.dataset.tab = 'spin';
-  findOptions();
+  if (ev.target.closest('#findbtn')){
+    document.body.dataset.tab = 'spin';
+    findOptions();
+    return;
+  }
+  /* the list's own filter chips drive the same shared filters as Home (wave 19) */
+  var fc = ev.target.closest('[data-fs]'); if (fc){ openFilterSheet(fc.dataset.fs); return; }
+  var tg = ev.target.closest('[data-toggle]'); if (tg){ if (tg.dataset.toggle === 'star'){ starOn = !starOn; draw.active = false; render(); } return; }
+  if (ev.target.closest('#listclearfilters')){ clearAllFilters(); draw.active = false; nearby.active = false; render(); return; }
 });
 
 /* The + is now the one door for "put a new place in front of me": discover somewhere, or
@@ -5398,7 +5426,7 @@ document.getElementById('filter-overlay').addEventListener('click', function(ev)
   }
   if (ev.target.closest('#fs-reset')){ fsResetDraft(); renderFilterSheet(); return; }
   if (ev.target.closest('#fs-apply')){
-    fsCommitDraft(); return;
+    fsCommitDraft(); renderList(); return;
   }
 });
 
