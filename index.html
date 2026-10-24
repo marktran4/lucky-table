@@ -418,6 +418,13 @@ h2 small{font-weight:700; color:var(--muted); font-size:12px}
 .swipebg::before{content:'\2190\00a0\00a0'; font-size:17px}
 .swipewrap .listcard{position:relative; background:var(--bg); transition:transform .2s cubic-bezier(.2,.7,.3,1)}
 .swipewrap.swiping .listcard{transition:none}
+/* pick-then-spin tick: a 44px target over the photo's corner, the visible ring smaller */
+.ltick{position:absolute; top:4px; right:4px; width:44px; height:44px; padding:0; background:none; display:flex; align-items:center; justify-content:center; z-index:1}
+.ltick span{width:30px; height:30px; border-radius:50%; border:2px solid rgba(255,255,255,.85); background:rgba(10,10,10,.45); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:15px}
+.ltick.sel span{background:var(--acc); border-color:var(--acc); animation:pop .15s cubic-bezier(.2,.7,.3,1.3) both}
+.listcard.lsel .photo{box-shadow:0 0 0 3px var(--acc)}
+.lpickhint{flex:1; text-align:center; font-size:15px; font-weight:800; color:var(--muted); padding:13px 16px}
+@media (prefers-reduced-motion: reduce){ .ltick.sel span{animation:none} }
 .byline{font-weight:800}   /* colour comes from the member record, inline */
 .empty-list{color:var(--muted); font-weight:700; text-align:center; padding:30px 12px; line-height:1.5}
 
@@ -3915,6 +3922,63 @@ function renderSortOptions(){
   }).join('');
 }
 
+/* ==================== Places tab: pick, then spin ====================
+   Tick the places you're weighing up on the want-to-try list, then spin the wheel across
+   just those (Mark, 2026-10-24, once the Takeout import made the list 312 long). Same
+   interaction as the Somewhere-new longlist, but on your own list, so the cap is 8 rather
+   than 3: past 8 the wedge labels stop being readable. Selection is per-device UI state and
+   never written to the table. The winner goes through the same saved-place result path as
+   a draw, tagged from:'list' so the result sheet doesn't offer to reshuffle a home draw. */
+var LIST_PICK_MAX = 8;
+var listSel = {};
+function listPickToggle(sel, id, max){
+  if (sel[id]){ delete sel[id]; return 'removed'; }
+  if (Object.keys(sel).length >= max) return 'full';
+  sel[id] = true;
+  return 'added';
+}
+/* drop picks that were deleted or marked visited since they were ticked */
+function listPickPrune(sel){
+  Object.keys(sel).forEach(function(id){ var p = place(id); if (!p || isBeen(p)) delete sel[id]; });
+  return Object.keys(sel);
+}
+function listSpinEntries(ids){
+  return ids.map(function(id){
+    var p = place(id);
+    return p ? { label:p.name, emoji:cuisineEmoji(p.cuisine), value:{ src:'saved', id:id, from:'list' } } : null;
+  }).filter(Boolean);
+}
+function listPickBarHtml(n){
+  if (!n) return '';
+  return '<div class="pickspace"></div><div class="pickbar"><div class="pickrow">'
+    + (n >= 2 ? '<button class="findbtn slim" id="lpickspin">Spin these ' + n + '</button>'
+              : '<div class="lpickhint">Tick one more to spin</div>')
+    + '<button class="pickx" id="lpickclear" aria-label="Clear picks">✕</button></div>'
+    + '<div class="pickcount">' + n + ' of ' + LIST_PICK_MAX + ' picked</div></div>';
+}
+function resShowsReshuffle(ctx){
+  return ctx.src === 'saved' && !ctx.from && draw.active && !draw.reshuffleUsed;
+}
+/* repaint one card and the bar in place: re-rendering 300 cards per tick flickers photos */
+function paintListPick(id){
+  var on = !!listSel[id];
+  document.querySelectorAll('#listcards .listcard[data-id="'+id+'"]').forEach(function(c){
+    c.classList.toggle('lsel', on);
+    var t = c.querySelector('.ltick'); if (!t) return;
+    t.classList.toggle('sel', on);
+    t.setAttribute('aria-checked', on ? 'true' : 'false');
+    t.firstChild.textContent = on ? '✓' : '';
+  });
+  var bar = document.getElementById('listpickbar');
+  if (bar) bar.innerHTML = listPickBarHtml(listPickPrune(listSel).length);
+}
+function spinListWheel(){
+  var entries = listSpinEntries(listPickPrune(listSel));
+  if (entries.length < 2){ renderList(); return; }
+  document.getElementById('wheel-h3').textContent = 'Let the wheel decide';
+  openWheel(entries, onPlacePicked);
+}
+
 function renderList(){
   /* The picks button, at the top of the tab that holds the list it draws from. It is a
      saved-list action, so it belongs with the saved list -- and the Dine out tab is a
@@ -3928,6 +3992,7 @@ function renderList(){
   document.getElementById('listpicks').innerHTML = rawPoolSize() ? picksBtnHtml() : '';
   var seg = document.querySelector('#listseg button.on');
   var which = seg ? seg.dataset.seg : 'try';
+  var picked = listPickPrune(listSel);
   var arr = placesArr().filter(function(p){ return which === 'been' ? isBeen(p) : !isBeen(p); });
   var total = arr.length;
   var q = listQuery.trim().toLowerCase();
@@ -3973,14 +4038,21 @@ function renderList(){
     if (p.kidFriendly) meta.push('<span class="kidbadge">kid-ok</span>');
     if (p.star) meta.push('<span class="starbadge">&#11088;</span>');
     if (p.blocked) meta.push('<span class="blockedbadge">ruled out</span>');
+    var sel = !!listSel[p.id];
+    var tick = (which === 'try' && !p.blocked)
+      ? '<button class="ltick'+(sel?' sel':'')+'" data-ltick="'+p.id+'" role="checkbox" aria-checked="'+(sel?'true':'false')+'"'
+        + ' aria-label="Pick '+esc(p.name)+' for the wheel"><span>'+(sel?'✓':'')+'</span></button>'
+      : '';
     return '<div class="swipewrap" data-id="'+p.id+'">'
       + '<div class="swipebg" aria-hidden="true">Remove</div>'
-      + '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+'" data-id="'+p.id+'"'
+      + '<div class="listcard'+(which==='been'?' been':'')+(p.blocked?' blocked':'')+(sel&&tick?' lsel':'')+'" data-id="'+p.id+'"'
       +   ' role="button" tabindex="0" aria-label="'+esc(p.name)+'">'
+      + tick
       + photoHtml(p, 'photo')
       + '<div class="listbody"><div class="name">'+esc(p.name)+'</div>'
       + '<div class="meta">'+meta.join('<span class="sep">·</span>')+'</div></div></div></div>';
-  }).join('');
+  }).join('')
+    + (which === 'try' ? '<div id="listpickbar">' + listPickBarHtml(picked.length) + '</div>' : '');
 }
 
 /* ==================== wheel (presentational: entries + onPick) ==================== */
@@ -4080,7 +4152,7 @@ function openResult(ctx){
   document.getElementById('res-actions').style.display = 'none';
   document.getElementById('res-lock').textContent = (ctx.src === 'nearby') ? 'Save & lock it in' : 'Lock it in';
   /* "Show 3 others" only makes sense from an active draw, not a rail tap */
-  document.getElementById('res-reshuffle').style.display = (ctx.src === 'saved' && draw.active && !draw.reshuffleUsed) ? '' : 'none';
+  document.getElementById('res-reshuffle').style.display = resShowsReshuffle(ctx) ? '' : 'none';
   document.getElementById('result-overlay').classList.add('show');
   document.querySelector('#result-overlay .sheet').scrollTop = 0;   // always open showing the top, not scrolled to the buttons
 
@@ -5346,9 +5418,9 @@ function fsCommitDraft(){
 /* result overlay */
 document.getElementById('res-lock').addEventListener('click', lockIn);
 document.getElementById('res-reshuffle').addEventListener('click', function(){ if (draw.pick && draw.pick.src === 'saved') reshuffle(); });
-document.getElementById('res-back').addEventListener('click', function(){ closeOverlay('result-overlay'); if (draw.pick && draw.pick.src === 'nearby'){ renderSpin(); } else { draw.active = false; renderSpin(); } });
-document.getElementById('res-done').addEventListener('click', function(){ closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
-document.getElementById('res-visited').addEventListener('click', function(){ markVisitedFlow(); closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
+document.getElementById('res-back').addEventListener('click', function(){ closeOverlay('result-overlay'); if (draw.pick && draw.pick.from === 'list') return; if (draw.pick && draw.pick.src === 'nearby'){ renderSpin(); } else { draw.active = false; renderSpin(); } });
+document.getElementById('res-done').addEventListener('click', function(){ if (draw.pick && draw.pick.from === 'list') listSel = {}; closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
+document.getElementById('res-visited').addEventListener('click', function(){ if (draw.pick && draw.pick.from === 'list') listSel = {}; markVisitedFlow(); closeOverlay('result-overlay'); nearby.active = false; draw.active = false; render(); });
 
 /* list segment + cards */
 document.getElementById('listseg').addEventListener('click', function(ev){
@@ -5358,6 +5430,13 @@ document.getElementById('listseg').addEventListener('click', function(ev){
 });
 document.getElementById('listcards').addEventListener('click', function(ev){
   if (swipedRecently){ swipedRecently = false; return; }   // a horizontal swipe shouldn't also open the card
+  var t = ev.target.closest('.ltick');
+  if (t){
+    if (listPickToggle(listSel, t.dataset.ltick, LIST_PICK_MAX) === 'full'){ toast(LIST_PICK_MAX + ' is all the wheel can fit. Untick one first'); return; }
+    paintListPick(t.dataset.ltick); return;
+  }
+  if (ev.target.closest('#lpickspin')){ spinListWheel(); return; }
+  if (ev.target.closest('#lpickclear')){ listSel = {}; renderList(); return; }
   var c = ev.target.closest('.listcard'); if (c) openDetail(c.dataset.id);
 });
 
