@@ -140,6 +140,10 @@ break the tie. Two people, one table code, warm-paper look, plum accent.
   **Pick, then spin:** on Want to try, tick the circle on up to 8 photos and a
   **Spin these N** bar appears; the wheel picks among just those. Ticks are per-phone and
   clear once you tap Done on the winner.
+  **Filters:** Want to try has the same chips as Home (distance, cuisine, price, rating,
+  favourites, more) and they are one shared setting: narrow it on either tab and both the
+  list and the draw follow. "Showing X of Y · filters on" says when the list is cut down.
+  Been is never filtered, and the Home cuisine tile doesn't apply to the list.
   **Search** and a **sort** control sit above the segments (recently added by
   default; also longest-on-list, nearest, rating, cuisine, name). Sort order is
   remembered on the phone; the search box is not, so reopening never shows you a
